@@ -30,20 +30,44 @@ export default function HomePage() {
             return;
         }
 
-        api.get<Folder[]>(
-            `/worlds/${selectedWorld.id}/folders`,
-        )
-            .then((response) => {
-                setFolders(response.data);
-            })
-            .catch((error) => {
-                console.error(
-                    "Nie udało się pobrać folderów:",
-                    error,
-                );
-                setFolders([]);
-            });
+        loadFolders(selectedWorld.id);
     }, [selectedWorld]);
+
+    const loadFolders = async (worldId: string) => {
+        try {
+            const response = await api.get<Folder[]>(
+                `/worlds/${worldId}/folders`,
+            );
+
+            setFolders(response.data);
+        } catch (error) {
+            console.error(
+                "Nie udało się pobrać folderów:",
+                error,
+            );
+
+            setFolders([]);
+        }
+    };
+
+    const handleCreateFolder = async (name: string) => {
+        if (!selectedWorld) {
+            return;
+        }
+
+        const response = await api.post<Folder>(
+            `/worlds/${selectedWorld.id}/folders`,
+            {
+                name,
+                parentFolderId: null,
+            },
+        );
+
+        setFolders((currentFolders) => [
+            ...currentFolders,
+            response.data,
+        ]);
+    };
 
     return (
         <main
@@ -97,6 +121,9 @@ export default function HomePage() {
                         folders={folders}
                         worldName={
                             selectedWorld?.name ?? null
+                        }
+                        onCreateFolder={
+                            handleCreateFolder
                         }
                     />
                 </div>
