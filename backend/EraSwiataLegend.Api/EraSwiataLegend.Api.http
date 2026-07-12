@@ -1,0 +1,6 @@
+@EraSwiataLegend.Api_HostAddress = http://localhost:5186
+
+GET {{EraSwiataLegend.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

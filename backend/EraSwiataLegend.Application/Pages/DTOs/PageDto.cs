@@ -1,0 +1,11 @@
+namespace EraSwiataLegend.Application.Pages.DTOs;
+
+public sealed record PageDto(
+    Guid Id,
+    Guid WorldId,
+    Guid FolderId,
+    string Title,
+    string Content,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);

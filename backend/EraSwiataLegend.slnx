@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="EraSwiataLegend.Api/EraSwiataLegend.Api.csproj" />
+  <Project Path="EraSwiataLegend.Application/EraSwiataLegend.Application.csproj" />
+  <Project Path="EraSwiataLegend.Domain/EraSwiataLegend.Domain.csproj" />
+  <Project Path="EraSwiataLegend.Infrastructure/EraSwiataLegend.Infrastructure.csproj" />
+</Solution>
