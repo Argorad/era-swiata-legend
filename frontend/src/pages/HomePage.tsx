@@ -30,7 +30,7 @@ export default function HomePage() {
             return;
         }
 
-        loadFolders(selectedWorld.id);
+        void loadFolders(selectedWorld.id);
     }, [selectedWorld]);
 
     const loadFolders = async (worldId: string) => {
@@ -52,7 +52,7 @@ export default function HomePage() {
 
     const handleCreateFolder = async (name: string) => {
         if (!selectedWorld) {
-            return;
+            throw new Error("Nie wybrano świata.");
         }
 
         const response = await api.post<Folder>(
@@ -67,6 +67,30 @@ export default function HomePage() {
             ...currentFolders,
             response.data,
         ]);
+    };
+
+    const handleRenameFolder = async (
+        folderId: string,
+        name: string,
+    ) => {
+        if (!selectedWorld) {
+            throw new Error("Nie wybrano świata.");
+        }
+
+        const response = await api.put<Folder>(
+            `/worlds/${selectedWorld.id}/folders/${folderId}`,
+            {
+                name,
+            },
+        );
+
+        setFolders((currentFolders) =>
+            currentFolders.map((folder) =>
+                folder.id === folderId
+                    ? response.data
+                    : folder,
+            ),
+        );
     };
 
     return (
@@ -124,6 +148,9 @@ export default function HomePage() {
                         }
                         onCreateFolder={
                             handleCreateFolder
+                        }
+                        onRenameFolder={
+                            handleRenameFolder
                         }
                     />
                 </div>

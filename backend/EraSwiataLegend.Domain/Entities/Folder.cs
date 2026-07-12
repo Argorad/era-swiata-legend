@@ -19,4 +19,17 @@ public class Folder : BaseEntity
 
     public ICollection<Page> Pages { get; set; } =
         new List<Page>();
+
+    public void Rename(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException(
+                "Nazwa folderu jest wymagana.",
+                nameof(name));
+        }
+
+        Name = name.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

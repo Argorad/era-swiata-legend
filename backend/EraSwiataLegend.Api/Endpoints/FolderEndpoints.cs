@@ -78,6 +78,47 @@ public static class FolderEndpoints
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPut("/{folderId:guid}",
+            async (
+                Guid worldId,
+                Guid folderId,
+                RenameFolderRequest request,
+                RenameFolderCommandHandler handler,
+                CancellationToken cancellationToken) =>
+            {
+                if (string.IsNullOrWhiteSpace(request.Name))
+                {
+                    return Results.ValidationProblem(
+                        new Dictionary<string, string[]>
+                        {
+                            ["name"] = ["Nazwa folderu jest wymagana."]
+                        });
+                }
+
+                var command = new RenameFolderCommand(
+                    worldId,
+                    folderId,
+                    request.Name.Trim());
+
+                var result = await handler.HandleAsync(
+                    command,
+                    cancellationToken);
+
+                if (result.Error == "FolderNotFound")
+                {
+                    return Results.NotFound(
+                        new
+                        {
+                            message = "Nie znaleziono folderu."
+                        });
+                }
+
+                return Results.Ok(result.Folder);
+            })
+            .Produces<FolderDto>(StatusCodes.Status200OK)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

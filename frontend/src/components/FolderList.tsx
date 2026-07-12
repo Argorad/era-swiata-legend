@@ -1,16 +1,22 @@
 import { useState } from "react";
 import type { Folder } from "../types/Folder";
+import FolderItem from "./FolderItem";
 
 interface Props {
     folders: Folder[];
     worldName: string | null;
     onCreateFolder: (name: string) => Promise<void>;
+    onRenameFolder: (
+        folderId: string,
+        name: string,
+    ) => Promise<void>;
 }
 
 export default function FolderList({
     folders,
     worldName,
     onCreateFolder,
+    onRenameFolder,
 }: Props) {
     const [isCreating, setIsCreating] = useState(false);
     const [folderName, setFolderName] = useState("");
@@ -181,18 +187,13 @@ export default function FolderList({
                     }}
                 >
                     {folders.map((folder) => (
-                        <li
+                        <FolderItem
                             key={folder.id}
-                            style={{
-                                padding: "12px 14px",
-                                marginBottom: "8px",
-                                border: "1px solid #ccc",
-                                borderRadius: "8px",
-                                background: "white",
-                            }}
-                        >
-                            📁 {folder.name}
-                        </li>
+                            folder={folder}
+                            onRenameFolder={
+                                onRenameFolder
+                            }
+                        />
                     ))}
                 </ul>
             )}
