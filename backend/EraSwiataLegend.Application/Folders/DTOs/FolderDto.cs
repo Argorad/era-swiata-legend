@@ -1,3 +1,5 @@
+using EraSwiataLegend.Domain.Enums;
+
 namespace EraSwiataLegend.Application.Folders.DTOs;
 
 public sealed record FolderDto(
@@ -5,6 +7,6 @@ public sealed record FolderDto(
     Guid WorldId,
     Guid? ParentFolderId,
     string Name,
+    FolderType Type,
     DateTime CreatedAt,
-    DateTime? UpdatedAt
-);
+    DateTime? UpdatedAt);

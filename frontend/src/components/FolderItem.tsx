@@ -19,7 +19,21 @@ export default function FolderItem({
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const isArchive = folder.type === 1;
+    const isTrash = folder.type === 2;
+    const isSystemFolder = isArchive || isTrash;
+
+    const icon = isArchive
+        ? "📦"
+        : isTrash
+          ? "🗑️"
+          : "📁";
+
     const handleStartRename = () => {
+        if (isSystemFolder) {
+            return;
+        }
+
         setName(folder.name);
         setError(null);
         setIsRenaming(true);
@@ -76,7 +90,9 @@ export default function FolderItem({
                 marginBottom: "8px",
                 border: "1px solid #ccc",
                 borderRadius: "8px",
-                background: "white",
+                background: isSystemFolder
+                    ? "#f7f7f7"
+                    : "white",
             }}
         >
             {isRenaming ? (
@@ -152,14 +168,19 @@ export default function FolderItem({
                         style={{
                             minWidth: 0,
                             overflowWrap: "anywhere",
+                            fontWeight: isSystemFolder
+                                ? 600
+                                : 400,
                         }}
                     >
-                        📁 {folder.name}
+                        {icon} {folder.name}
                     </span>
 
-                    <FolderActions
-                        onRename={handleStartRename}
-                    />
+                    {!isSystemFolder && (
+                        <FolderActions
+                            onRename={handleStartRename}
+                        />
+                    )}
                 </div>
             )}
         </li>

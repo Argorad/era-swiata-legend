@@ -113,6 +113,16 @@ public static class FolderEndpoints
                         });
                 }
 
+                if (result.Error == "SystemFolderCannotBeRenamed")
+                {
+                    return Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "Nie można zmienić nazwy folderu systemowego."
+                        });
+                }
+
                 return Results.Ok(result.Folder);
             })
             .Produces<FolderDto>(StatusCodes.Status200OK)

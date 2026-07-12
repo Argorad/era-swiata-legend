@@ -1,5 +1,6 @@
 using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Domain.Entities;
+using EraSwiataLegend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Infrastructure.Persistence;
@@ -37,6 +38,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(folder => folder.Name)
                 .IsRequired()
                 .HasMaxLength(200);
+
+            entity.Property(folder => folder.Type)
+                .HasConversion<int>()
+                .HasDefaultValue(FolderType.Normal)
+                .IsRequired();
 
             entity.HasOne(folder => folder.World)
                 .WithMany(world => world.Folders)

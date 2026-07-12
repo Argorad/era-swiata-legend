@@ -20,12 +20,14 @@ public sealed class GetFoldersQueryHandler
         return await _dbContext.Folders
             .AsNoTracking()
             .Where(folder => folder.WorldId == worldId)
-            .OrderBy(folder => folder.Name)
+            .OrderBy(folder => folder.Type)
+            .ThenBy(folder => folder.Name)
             .Select(folder => new FolderDto(
                 folder.Id,
                 folder.WorldId,
                 folder.ParentFolderId,
                 folder.Name,
+                folder.Type,
                 folder.CreatedAt,
                 folder.UpdatedAt))
             .ToListAsync(cancellationToken);

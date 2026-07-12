@@ -2,6 +2,7 @@ using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Application.Worlds.Commands;
 using EraSwiataLegend.Application.Worlds.DTOs;
 using EraSwiataLegend.Domain.Entities;
+using EraSwiataLegend.Domain.Enums;
 
 namespace EraSwiataLegend.Application.Worlds.Handlers;
 
@@ -24,6 +25,23 @@ public sealed class CreateWorldCommandHandler
             Description = command.Description ?? string.Empty
         };
 
+        var archiveFolder = new Folder
+        {
+            World = world,
+            Name = "Archive",
+            Type = FolderType.Archive
+        };
+
+        var trashFolder = new Folder
+        {
+            World = world,
+            Name = "Trash",
+            Type = FolderType.Trash
+        };
+
+        world.Folders.Add(archiveFolder);
+        world.Folders.Add(trashFolder);
+
         _dbContext.Worlds.Add(world);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -32,7 +50,6 @@ public sealed class CreateWorldCommandHandler
             world.Name,
             world.Description,
             world.CreatedAt,
-            world.UpdatedAt
-        );
+            world.UpdatedAt);
     }
 }

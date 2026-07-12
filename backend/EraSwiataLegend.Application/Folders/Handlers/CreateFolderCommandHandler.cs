@@ -2,6 +2,7 @@ using EraSwiataLegend.Application.Folders.Commands;
 using EraSwiataLegend.Application.Folders.DTOs;
 using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Domain.Entities;
+using EraSwiataLegend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Application.Folders.Handlers;
@@ -52,7 +53,8 @@ public sealed class CreateFolderCommandHandler
         {
             WorldId = command.WorldId,
             ParentFolderId = command.ParentFolderId,
-            Name = command.Name
+            Name = command.Name,
+            Type = FolderType.Normal
         };
 
         _dbContext.Folders.Add(folder);
@@ -63,6 +65,7 @@ public sealed class CreateFolderCommandHandler
             folder.WorldId,
             folder.ParentFolderId,
             folder.Name,
+            folder.Type,
             folder.CreatedAt,
             folder.UpdatedAt);
 

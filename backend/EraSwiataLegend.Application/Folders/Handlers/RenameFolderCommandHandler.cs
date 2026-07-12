@@ -33,7 +33,16 @@ public sealed class RenameFolderCommandHandler
                 "FolderNotFound");
         }
 
-        folder.Rename(command.Name);
+        try
+        {
+            folder.Rename(command.Name);
+        }
+        catch (InvalidOperationException)
+        {
+            return new RenameFolderResult(
+                null,
+                "SystemFolderCannotBeRenamed");
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -42,6 +51,7 @@ public sealed class RenameFolderCommandHandler
             folder.WorldId,
             folder.ParentFolderId,
             folder.Name,
+            folder.Type,
             folder.CreatedAt,
             folder.UpdatedAt);
 
