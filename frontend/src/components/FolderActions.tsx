@@ -2,16 +2,22 @@ import { useState } from "react";
 
 interface Props {
     onRename: () => void;
+    onMove: () => void;
+    onArchive: () => void;
+    onTrash: () => void;
 }
 
 export default function FolderActions({
     onRename,
+    onMove,
+    onArchive,
+    onTrash,
 }: Props) {
     const [isOpen, setIsOpen] = useState(false);
 
-    const handleRename = () => {
+    const runAction = (action: () => void) => {
         setIsOpen(false);
-        onRename();
+        action();
     };
 
     const menuButtonStyle: React.CSSProperties = {
@@ -23,12 +29,6 @@ export default function FolderActions({
         border: "none",
         color: "#222",
         fontSize: "14px",
-    };
-
-    const disabledButtonStyle: React.CSSProperties = {
-        ...menuButtonStyle,
-        cursor: "not-allowed",
-        opacity: 0.45,
     };
 
     return (
@@ -44,12 +44,7 @@ export default function FolderActions({
                     height: "36px",
                     padding: 0,
                     fontSize: "20px",
-                    lineHeight: 1,
                     cursor: "pointer",
-                    color: "white",
-                    background: "#666",
-                    border: "none",
-                    borderRadius: "4px",
                 }}
             >
                 ⋮
@@ -61,8 +56,8 @@ export default function FolderActions({
                         position: "absolute",
                         top: "42px",
                         right: 0,
-                        zIndex: 10,
-                        minWidth: "200px",
+                        zIndex: 20,
+                        minWidth: "210px",
                         padding: "6px",
                         border: "1px solid #ccc",
                         borderRadius: "8px",
@@ -73,7 +68,7 @@ export default function FolderActions({
                 >
                     <button
                         type="button"
-                        onClick={handleRename}
+                        onClick={() => runAction(onRename)}
                         style={menuButtonStyle}
                     >
                         ✏️ Zmień nazwę
@@ -81,40 +76,27 @@ export default function FolderActions({
 
                     <button
                         type="button"
-                        disabled
-                        style={disabledButtonStyle}
+                        onClick={() => runAction(onMove)}
+                        style={menuButtonStyle}
                     >
-                        📁 Nowy podfolder
+                        📂 Przenieś...
                     </button>
 
                     <button
                         type="button"
-                        disabled
-                        style={disabledButtonStyle}
+                        onClick={() => runAction(onArchive)}
+                        style={menuButtonStyle}
                     >
-                        📄 Nowa strona
+                        📦 Archiwizuj
                     </button>
 
-                    <div
+                    <button
+                        type="button"
+                        onClick={() => runAction(onTrash)}
                         style={{
-                            height: "1px",
-                            margin: "6px 0",
-                            background: "#ddd",
+                            ...menuButtonStyle,
+                            color: "#b00020",
                         }}
-                    />
-
-                    <button
-                        type="button"
-                        disabled
-                        style={disabledButtonStyle}
-                    >
-                        📂 Przenieś
-                    </button>
-
-                    <button
-                        type="button"
-                        disabled
-                        style={disabledButtonStyle}
                     >
                         🗑️ Przenieś do kosza
                     </button>

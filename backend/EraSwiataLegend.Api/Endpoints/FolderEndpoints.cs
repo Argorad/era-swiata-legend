@@ -129,6 +129,66 @@ public static class FolderEndpoints
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPatch("/{folderId:guid}/move",
+            async (
+                Guid worldId,
+                Guid folderId,
+                MoveFolderRequest request,
+                MoveFolderCommandHandler handler,
+                CancellationToken cancellationToken) =>
+            {
+                var command = new MoveFolderCommand(
+                    worldId,
+                    folderId,
+                    request.DestinationFolderId);
+
+                var result = await handler.HandleAsync(
+                    command,
+                    cancellationToken);
+
+                return result.Error switch
+                {
+                    "FolderNotFound" => Results.NotFound(
+                        new
+                        {
+                            message = "Nie znaleziono folderu."
+                        }),
+
+                    "DestinationFolderNotFound" => Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "Nie znaleziono folderu docelowego."
+                        }),
+
+                    "SystemFolderCannotBeMoved" => Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "Nie można przenosić folderu systemowego."
+                        }),
+
+                    "CannotMoveToSelf" => Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "Folder nie może zostać przeniesiony do samego siebie."
+                        }),
+
+                    "CannotMoveToDescendant" => Results.BadRequest(
+                        new
+                        {
+                            message =
+                                "Folder nie może zostać przeniesiony do własnego podfolderu."
+                        }),
+
+                    _ => Results.Ok(result.Folder)
+                };
+            })
+            .Produces<FolderDto>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

@@ -41,4 +41,22 @@ public class Folder : BaseEntity
         Name = name.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void MoveTo(Guid? destinationFolderId)
+    {
+        if (Type is FolderType.Archive or FolderType.Trash)
+        {
+            throw new InvalidOperationException(
+                "Nie można przenosić folderu systemowego.");
+        }
+
+        if (destinationFolderId == Id)
+        {
+            throw new InvalidOperationException(
+                "Folder nie może być swoim własnym folderem nadrzędnym.");
+        }
+
+        ParentFolderId = destinationFolderId;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

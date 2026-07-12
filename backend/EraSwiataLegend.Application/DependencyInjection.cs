@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<CreateFolderCommandHandler>();
         services.AddScoped<GetFoldersQueryHandler>();
         services.AddScoped<RenameFolderCommandHandler>();
+        services.AddScoped<MoveFolderCommandHandler>();
 
         services.AddScoped<CreatePageCommandHandler>();
         services.AddScoped<GetPagesQueryHandler>();
