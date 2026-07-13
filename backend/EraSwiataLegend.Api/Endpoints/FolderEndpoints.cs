@@ -15,11 +15,13 @@ public static class FolderEndpoints
         group.MapGet("/",
             async (
                 Guid worldId,
+                bool playerView,
                 GetFoldersQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
                 var folders = await handler.HandleAsync(
                     worldId,
+                    playerView,
                     cancellationToken);
 
                 return Results.Ok(folders);

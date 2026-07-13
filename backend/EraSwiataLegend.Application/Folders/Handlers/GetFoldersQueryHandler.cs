@@ -18,6 +18,7 @@ public sealed class GetFoldersQueryHandler
 
     public async Task<List<FolderDto>> HandleAsync(
         Guid worldId,
+        bool playerView,
         CancellationToken cancellationToken = default)
     {
         var worldExists = await _dbContext.Worlds
@@ -30,7 +31,7 @@ public sealed class GetFoldersQueryHandler
             return [];
         }
 
-        var existingSystemTypes = await _dbContext.Folders
+        var existingSystemTypes = playerView ? [] : await _dbContext.Folders
             .Where(folder =>
                 folder.WorldId == worldId &&
                 folder.Type != FolderType.Normal)
@@ -67,7 +68,7 @@ public sealed class GetFoldersQueryHandler
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        return await _dbContext.Folders
+        var folders = await _dbContext.Folders
             .AsNoTracking()
             .Where(folder => folder.WorldId == worldId)
             .OrderBy(folder => folder.Type)
@@ -78,8 +79,24 @@ public sealed class GetFoldersQueryHandler
                 folder.ParentFolderId,
                 folder.Name,
                 folder.Type,
+                folder.IsVisibleToPlayers,
                 folder.CreatedAt,
                 folder.UpdatedAt))
             .ToListAsync(cancellationToken);
+
+        if (!playerView) return folders;
+        var byId = folders.ToDictionary(folder => folder.Id);
+        return folders.Where(folder =>
+        {
+            var current = folder;
+            var visited = new HashSet<Guid>();
+            while (true)
+            {
+                if (!current.IsVisibleToPlayers || !visited.Add(current.Id)) return false;
+                if (!current.ParentFolderId.HasValue) return true;
+                if (!byId.TryGetValue(current.ParentFolderId.Value, out var parent)) return false;
+                current = parent;
+            }
+        }).ToList();
     }
 }

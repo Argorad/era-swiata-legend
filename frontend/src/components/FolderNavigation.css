@@ -252,12 +252,10 @@
     font-size: 12px;
 }
 
-/* Style przygotowane również dla okien folderów. */
-
 .fantasy-dialog-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -395,3 +393,32 @@
     cursor: not-allowed;
     opacity: 0.5;
 }
+
+@media (max-width: 600px) {
+    .fantasy-dialog-backdrop {
+        align-items: center;
+        padding: 10px;
+    }
+
+    .fantasy-dialog {
+        max-height: calc(100vh - 20px);
+        overflow-y: auto;
+        padding: 32px 20px 22px;
+    }
+
+    .fantasy-dialog-ornament {
+        top: 12px;
+        right: 14px;
+        left: auto;
+        transform: rotate(45deg);
+    }
+
+    .fantasy-dialog-actions {
+        flex-direction: column-reverse;
+    }
+
+    .fantasy-button {
+        width: 100%;
+    }
+}
+.folder-private-badge { margin-left:auto; color:#8a6535; font-size:11px; filter:grayscale(.25); }

@@ -2,6 +2,7 @@ using EraSwiataLegend.Application.Folders.Commands;
 using EraSwiataLegend.Application.Folders.DTOs;
 using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Domain.Enums;
+using EraSwiataLegend.Domain.Rules;
 using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Application.Folders.Handlers;
@@ -70,25 +71,14 @@ public sealed class MoveFolderCommandHandler
                 "DestinationFolderNotFound");
         }
 
-        var currentId = command.DestinationFolderId;
-
-        while (currentId is not null)
+        if (FolderHierarchyRules.WouldCreateCycle(
+                folder.Id,
+                command.DestinationFolderId,
+                parentByFolderId))
         {
-            if (currentId.Value == folder.Id)
-            {
-                return new MoveFolderResult(
-                    null,
-                    "CannotMoveToDescendant");
-            }
-
-            if (!parentByFolderId.TryGetValue(
-                    currentId.Value,
-                    out var parentId))
-            {
-                break;
-            }
-
-            currentId = parentId;
+            return new MoveFolderResult(
+                null,
+                "CannotMoveToDescendant");
         }
 
         folder.MoveTo(command.DestinationFolderId);
@@ -101,6 +91,7 @@ public sealed class MoveFolderCommandHandler
             folder.ParentFolderId,
             folder.Name,
             folder.Type,
+            folder.IsVisibleToPlayers,
             folder.CreatedAt,
             folder.UpdatedAt);
 

@@ -1,5 +1,8 @@
 using EraSwiataLegend.Application.Folders.Handlers;
+using EraSwiataLegend.Application.Files;
 using EraSwiataLegend.Application.Pages.Handlers;
+using EraSwiataLegend.Application.Search;
+using EraSwiataLegend.Application.Map;
 using EraSwiataLegend.Application.Worlds.Handlers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +24,13 @@ public static class DependencyInjection
 
         services.AddScoped<CreatePageCommandHandler>();
         services.AddScoped<GetPagesQueryHandler>();
+        services.AddScoped<PageManagementService>();
+        services.AddScoped<FileLibraryService>();
+        services.AddScoped<KnowledgeSearchService>();
+        services.AddScoped<MapMarkerService>();
+        services.AddScoped<WorldMapService>();
+        services.AddScoped<MarkerCategoryService>();
+        services.AddScoped<MapCompositionService>();
 
         return services;
     }

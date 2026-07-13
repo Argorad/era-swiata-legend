@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { World } from "../types/World";
+import ModalPortal from "./ModalPortal";
 
 interface Props {
     world: World;
@@ -37,13 +38,14 @@ export default function WorldArchiveDialog({
     };
 
     return (
-        <div className="world-dialog-backdrop">
-            <form
-                className="world-dialog"
-                role="dialog"
-                aria-modal="true"
-                onSubmit={handleSubmit}
-            >
+        <ModalPortal>
+            <div className="world-dialog-backdrop">
+                <form
+                    className="world-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    onSubmit={handleSubmit}
+                >
                 <div className="world-dialog-ornament">
                     <span>▣</span>
                 </div>
@@ -93,7 +95,8 @@ export default function WorldArchiveDialog({
                             : "Przenieś do archiwum"}
                     </button>
                 </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </ModalPortal>
     );
 }

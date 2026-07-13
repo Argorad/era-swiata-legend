@@ -28,6 +28,7 @@ public sealed class GetPagesQueryHandler
                 page.Id,
                 page.WorldId,
                 page.FolderId,
+                page.PreviousFolderId,
                 page.Title,
                 page.Content,
                 page.CreatedAt,

@@ -11,6 +11,20 @@ public interface IApplicationDbContext
 
     DbSet<Page> Pages { get; }
 
+    DbSet<FileAttachment> FileAttachments { get; }
+
+    DbSet<MapMarker> MapMarkers { get; }
+
+    DbSet<WorldMap> WorldMaps { get; }
+
+    DbSet<MarkerCategory> MarkerCategories { get; }
+
+    DbSet<MapImageLayer> MapImageLayers { get; }
+
+    DbSet<MapDrawingStroke> MapDrawingStrokes { get; }
+
+    DbSet<UserAccount> UserAccounts { get; }
+
     Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default);
 }

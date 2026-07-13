@@ -1,5 +1,7 @@
 using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Infrastructure.Persistence;
+using EraSwiataLegend.Infrastructure.Files;
+using EraSwiataLegend.Infrastructure.Ai;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +23,15 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<ApplicationDbContext>());
+
+        services.Configure<FileStorageOptions>(options =>
+        {
+            options.RootPath = configuration[
+                $"{FileStorageOptions.SectionName}:RootPath"]
+                ?? options.RootPath;
+        });
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddSingleton<IAiSearchProvider, DisabledAiSearchProvider>();
 
         return services;
     }

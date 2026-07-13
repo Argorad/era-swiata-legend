@@ -66,6 +66,7 @@ public sealed class CreateFolderCommandHandler
             folder.ParentFolderId,
             folder.Name,
             folder.Type,
+            folder.IsVisibleToPlayers,
             folder.CreatedAt,
             folder.UpdatedAt);
 

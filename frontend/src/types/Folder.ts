@@ -6,6 +6,7 @@ export interface Folder {
     parentFolderId: string | null;
     name: string;
     type: FolderType;
+    isVisibleToPlayers: boolean;
     createdAt: string;
     updatedAt: string | null;
 }

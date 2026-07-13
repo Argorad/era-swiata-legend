@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { World } from "../types/World";
+import ModalPortal from "./ModalPortal";
 
 interface Props {
     onCreate: (
@@ -71,29 +72,30 @@ export default function WorldCreateDialog({
     };
 
     return (
-        <div
-            className="world-dialog-backdrop"
-            role="presentation"
-            onMouseDown={(event) => {
-                if (
-                    event.target ===
-                        event.currentTarget &&
-                    !isSaving
-                ) {
-                    onClose();
-                }
-            }}
-        >
-            <form
-                className="world-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="create-world-title"
-                onSubmit={handleSubmit}
+        <ModalPortal>
+            <div
+                className="world-dialog-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                    if (
+                        event.target ===
+                            event.currentTarget &&
+                        !isSaving
+                    ) {
+                        onClose();
+                    }
+                }}
             >
-                <div className="world-dialog-ornament">
-                    <span>◆</span>
-                </div>
+                <form
+                    className="world-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="create-world-title"
+                    onSubmit={handleSubmit}
+                >
+                    <div className="world-dialog-ornament">
+                        <span>◆</span>
+                    </div>
 
                 <span className="world-dialog-kicker">
                     Nowa kampania
@@ -164,7 +166,8 @@ export default function WorldCreateDialog({
                             : "Utwórz świat"}
                     </button>
                 </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </ModalPortal>
     );
 }

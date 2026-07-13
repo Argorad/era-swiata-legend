@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Folder } from "../types/Folder";
+import ModalPortal from "./ModalPortal";
 
 interface Props {
     folders: Folder[];
@@ -118,71 +119,48 @@ export default function FolderCreateDialog({
     };
 
     return (
-        <div
-            role="presentation"
-            onMouseDown={(event) => {
-                if (
-                    event.target === event.currentTarget &&
-                    !isSaving
-                ) {
-                    onClose();
-                }
-            }}
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 100,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "20px",
-                background: "rgba(0, 0, 0, 0.45)",
-            }}
-        >
-            <form
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="create-folder-title"
-                onSubmit={handleSubmit}
-                style={{
-                    width: "100%",
-                    maxWidth: "500px",
-                    padding: "24px",
-                    borderRadius: "12px",
-                    background: "white",
-                    boxShadow:
-                        "0 20px 60px rgba(0, 0, 0, 0.3)",
+        <ModalPortal>
+            <div
+                className="fantasy-dialog-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                    if (
+                        event.target === event.currentTarget &&
+                        !isSaving
+                    ) {
+                        onClose();
+                    }
                 }}
             >
-                <h3
-                    id="create-folder-title"
-                    style={{ margin: "0 0 8px" }}
+                <form
+                    className="fantasy-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="create-folder-title"
+                    onSubmit={handleSubmit}
                 >
+                    <div className="fantasy-dialog-ornament">
+                        <span>◆</span>
+                    </div>
+
+                <span className="fantasy-dialog-kicker">
+                    Nowy rozdział
+                </span>
+
+                <h3 id="create-folder-title">
                     {parentFolder
                         ? "Nowy podfolder"
                         : "Nowy folder"}
                 </h3>
 
                 {parentFolder && (
-                    <p
-                        style={{
-                            margin: "0 0 20px",
-                            color: "#555",
-                        }}
-                    >
+                    <p className="fantasy-dialog-description">
                         Folder nadrzędny:{" "}
                         <strong>{parentFolder.name}</strong>
                     </p>
                 )}
 
-                <label
-                    htmlFor="new-folder-name"
-                    style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontWeight: 600,
-                    }}
-                >
+                <label htmlFor="new-folder-name">
                     Nazwa folderu
                 </label>
 
@@ -197,23 +175,9 @@ export default function FolderCreateDialog({
                     placeholder="Np. Miasta"
                     autoFocus
                     disabled={isSaving}
-                    style={{
-                        width: "100%",
-                        padding: "11px",
-                        marginBottom: "16px",
-                        border: "1px solid #bbb",
-                        borderRadius: "6px",
-                    }}
                 />
 
-                <label
-                    htmlFor="new-folder-parent"
-                    style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontWeight: 600,
-                    }}
-                >
+                <label htmlFor="new-folder-parent">
                     Utwórz w
                 </label>
 
@@ -225,13 +189,6 @@ export default function FolderCreateDialog({
                         setError(null);
                     }}
                     disabled={isSaving}
-                    style={{
-                        width: "100%",
-                        padding: "11px",
-                        marginBottom: "16px",
-                        border: "1px solid #bbb",
-                        borderRadius: "6px",
-                    }}
                 >
                     <option value="">
                         🌍 Główny poziom świata
@@ -261,24 +218,17 @@ export default function FolderCreateDialog({
 
                 {error && (
                     <p
-                        style={{
-                            margin: "0 0 16px",
-                            color: "#b00020",
-                        }}
+                        className="fantasy-dialog-error"
+                        role="alert"
                     >
                         {error}
                     </p>
                 )}
 
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "8px",
-                    }}
-                >
+                <div className="fantasy-dialog-actions">
                     <button
                         type="button"
+                        className="fantasy-button fantasy-button--ghost"
                         onClick={onClose}
                         disabled={isSaving}
                     >
@@ -287,6 +237,7 @@ export default function FolderCreateDialog({
 
                     <button
                         type="submit"
+                        className="fantasy-button fantasy-button--primary"
                         disabled={isSaving}
                     >
                         {isSaving
@@ -294,7 +245,8 @@ export default function FolderCreateDialog({
                             : "Utwórz"}
                     </button>
                 </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </ModalPortal>
     );
 }

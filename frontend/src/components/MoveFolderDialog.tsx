@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Folder } from "../types/Folder";
+import ModalPortal from "./ModalPortal";
 
 interface Props {
     folder: Folder;
@@ -111,6 +112,22 @@ export default function MoveFolderDialog({
         destinationId !==
         (folder.parentFolderId ?? "");
 
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape" && !isSaving) {
+                onClose();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () =>
+            window.removeEventListener(
+                "keydown",
+                handleKeyDown,
+            );
+    }, [isSaving, onClose]);
+
     const handleSubmit = async (
         event: React.FormEvent<HTMLFormElement>,
     ) => {
@@ -143,57 +160,43 @@ export default function MoveFolderDialog({
     };
 
     return (
-        <div
-            role="presentation"
-            onMouseDown={(event) => {
-                if (event.target === event.currentTarget) {
-                    onClose();
-                }
-            }}
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 100,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "20px",
-                background: "rgba(0, 0, 0, 0.45)",
-            }}
-        >
-            <form
-                onSubmit={handleSubmit}
-                style={{
-                    width: "100%",
-                    maxWidth: "480px",
-                    padding: "24px",
-                    borderRadius: "12px",
-                    background: "white",
-                    boxShadow:
-                        "0 20px 60px rgba(0, 0, 0, 0.3)",
+        <ModalPortal>
+            <div
+                className="fantasy-dialog-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                    if (
+                        event.target === event.currentTarget &&
+                        !isSaving
+                    ) {
+                        onClose();
+                    }
                 }}
             >
-                <h3 style={{ margin: "0 0 8px" }}>
+                <form
+                    className="fantasy-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="move-folder-title"
+                    onSubmit={handleSubmit}
+                >
+                    <div className="fantasy-dialog-ornament">
+                        <span>↪</span>
+                    </div>
+
+                <span className="fantasy-dialog-kicker">
+                    Zmiana położenia
+                </span>
+
+                <h3 id="move-folder-title">
                     Przenieś folder
                 </h3>
 
-                <p
-                    style={{
-                        margin: "0 0 20px",
-                        color: "#555",
-                    }}
-                >
+                <p className="fantasy-dialog-description">
                     Folder: <strong>{folder.name}</strong>
                 </p>
 
-                <label
-                    htmlFor="destination-folder"
-                    style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontWeight: 600,
-                    }}
-                >
+                <label htmlFor="destination-folder">
                     Miejsce docelowe
                 </label>
 
@@ -207,13 +210,6 @@ export default function MoveFolderDialog({
                         setError(null);
                     }}
                     disabled={isSaving}
-                    style={{
-                        width: "100%",
-                        padding: "11px",
-                        marginBottom: "12px",
-                        border: "1px solid #bbb",
-                        borderRadius: "6px",
-                    }}
                 >
                     <option value="">
                         🌍 Główny poziom świata
@@ -244,37 +240,24 @@ export default function MoveFolderDialog({
                     )}
                 </select>
 
-                <p
-                    style={{
-                        margin: "0 0 16px",
-                        color: "#777",
-                        fontSize: "13px",
-                    }}
-                >
+                <p className="fantasy-dialog-hint">
                     Folder oraz jego podfoldery są ukryte na
                     liście, aby nie można było utworzyć pętli.
                 </p>
 
                 {error && (
                     <p
-                        style={{
-                            margin: "0 0 16px",
-                            color: "#b00020",
-                        }}
+                        className="fantasy-dialog-error"
+                        role="alert"
                     >
                         {error}
                     </p>
                 )}
 
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "8px",
-                    }}
-                >
+                <div className="fantasy-dialog-actions">
                     <button
                         type="button"
+                        className="fantasy-button fantasy-button--ghost"
                         onClick={onClose}
                         disabled={isSaving}
                     >
@@ -283,6 +266,7 @@ export default function MoveFolderDialog({
 
                     <button
                         type="submit"
+                        className="fantasy-button fantasy-button--primary"
                         disabled={
                             isSaving ||
                             !destinationHasChanged
@@ -293,7 +277,8 @@ export default function MoveFolderDialog({
                             : "Przenieś"}
                     </button>
                 </div>
-            </form>
-        </div>
+                </form>
+            </div>
+        </ModalPortal>
     );
 }

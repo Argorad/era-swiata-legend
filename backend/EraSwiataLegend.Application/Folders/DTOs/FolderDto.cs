@@ -8,5 +8,6 @@ public sealed record FolderDto(
     Guid? ParentFolderId,
     string Name,
     FolderType Type,
+    bool IsVisibleToPlayers,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

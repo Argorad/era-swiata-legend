@@ -22,6 +22,62 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.FileAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVisibleToPlayers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid?>("PreviousFolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoredName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FolderId");
+
+                    b.HasIndex("StoredName")
+                        .IsUnique();
+
+                    b.HasIndex("WorldId");
+
+                    b.ToTable("FileAttachments");
+                });
+
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.Folder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -30,6 +86,11 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsVisibleToPlayers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -59,6 +120,327 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.ToTable("Folders");
                 });
 
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapDrawingStroke", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DashStyle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("solid");
+
+                    b.Property<string>("FillColor")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("transparent");
+
+                    b.Property<double>("FontSize")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(24.0);
+
+                    b.Property<bool>("HasTextBorder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsEraser")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVisible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsVisibleToPlayers")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MapId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("Opacity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.0);
+
+                    b.Property<string>("PointsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("Rotation")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Tool")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("pen");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorldId");
+
+                    b.HasIndex("MapId", "CreatedAt");
+
+                    b.ToTable("MapDrawingStrokes");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapImageLayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FileAttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVisibleToPlayers")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("MapId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<double>("Opacity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.0);
+
+                    b.Property<double>("PositionX")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("PositionY")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Rotation")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Scale")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileAttachmentId");
+
+                    b.HasIndex("WorldId");
+
+                    b.HasIndex("MapId", "SortOrder");
+
+                    b.ToTable("MapImageLayers");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapMarker", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorDisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("IsHiddenByGameMaster")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPlayerMarker")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPositionLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("MapId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PlayerVisibility")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<double>("PositionX")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("PositionY")
+                        .HasColumnType("double precision");
+
+                    b.Property<int?>("PreviousStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid?>("TargetMapId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("FolderId");
+
+                    b.HasIndex("MapId");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("PageId");
+
+                    b.HasIndex("TargetMapId");
+
+                    b.HasIndex("WorldId");
+
+                    b.ToTable("MapMarkers");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MarkerCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorldId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("MarkerCategories");
+                });
+
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.Page", b =>
                 {
                     b.Property<Guid>("Id")
@@ -73,6 +455,9 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PreviousFolderId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Title")
@@ -93,6 +478,42 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorldId");
 
                     b.ToTable("Pages");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.UserAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ExternalSubject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalSubject")
+                        .IsUnique();
+
+                    b.ToTable("UserAccounts");
                 });
 
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.World", b =>
@@ -127,6 +548,138 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.ToTable("Worlds");
                 });
 
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.WorldMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CanvasBackground")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("ocean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("GridColor")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("#9ed8e5");
+
+                    b.Property<double>("GridLineWidth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.5);
+
+                    b.Property<int>("GridMajorEvery")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5);
+
+                    b.Property<double>("GridOpacity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.55000000000000004);
+
+                    b.Property<int>("GridSize")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(64);
+
+                    b.Property<string>("GridStyle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("lines");
+
+                    b.Property<Guid>("ImageFileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDrawingLayerLocked")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDrawingLayerVisible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDrawingLayerVisibleToPlayers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsGridMajorVisible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsGridVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSnapToGridEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorldId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageFileId");
+
+                    b.HasIndex("WorldId");
+
+                    b.ToTable("WorldMaps");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.FileAttachment", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.Folder", "Folder")
+                        .WithMany("Files")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("Files")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Folder");
+
+                    b.Navigation("World");
+                });
+
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.Folder", b =>
                 {
                     b.HasOne("EraSwiataLegend.Domain.Entities.Folder", "ParentFolder")
@@ -141,6 +694,116 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("ParentFolder");
+
+                    b.Navigation("World");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapDrawingStroke", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.WorldMap", "Map")
+                        .WithMany("DrawingStrokes")
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("MapDrawingStrokes")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Map");
+
+                    b.Navigation("World");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapImageLayer", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.FileAttachment", "FileAttachment")
+                        .WithMany()
+                        .HasForeignKey("FileAttachmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.WorldMap", "Map")
+                        .WithMany("ImageLayers")
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("MapImageLayers")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FileAttachment");
+
+                    b.Navigation("Map");
+
+                    b.Navigation("World");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MapMarker", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.MarkerCategory", "Category")
+                        .WithMany("Markers")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.Folder", "Folder")
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.WorldMap", "Map")
+                        .WithMany("Markers")
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.UserAccount", "OwnerUser")
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.Page", "Page")
+                        .WithMany()
+                        .HasForeignKey("PageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.WorldMap", "TargetMap")
+                        .WithMany()
+                        .HasForeignKey("TargetMapId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("MapMarkers")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Folder");
+
+                    b.Navigation("Map");
+
+                    b.Navigation("OwnerUser");
+
+                    b.Navigation("Page");
+
+                    b.Navigation("TargetMap");
+
+                    b.Navigation("World");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MarkerCategory", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("MarkerCategories")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("World");
                 });
@@ -164,18 +827,65 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.Navigation("World");
                 });
 
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.WorldMap", b =>
+                {
+                    b.HasOne("EraSwiataLegend.Domain.Entities.FileAttachment", "ImageFile")
+                        .WithMany()
+                        .HasForeignKey("ImageFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EraSwiataLegend.Domain.Entities.World", "World")
+                        .WithMany("Maps")
+                        .HasForeignKey("WorldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ImageFile");
+
+                    b.Navigation("World");
+                });
+
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.Folder", b =>
                 {
                     b.Navigation("ChildFolders");
 
+                    b.Navigation("Files");
+
                     b.Navigation("Pages");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.MarkerCategory", b =>
+                {
+                    b.Navigation("Markers");
                 });
 
             modelBuilder.Entity("EraSwiataLegend.Domain.Entities.World", b =>
                 {
+                    b.Navigation("Files");
+
                     b.Navigation("Folders");
 
+                    b.Navigation("MapDrawingStrokes");
+
+                    b.Navigation("MapImageLayers");
+
+                    b.Navigation("MapMarkers");
+
+                    b.Navigation("Maps");
+
+                    b.Navigation("MarkerCategories");
+
                     b.Navigation("Pages");
+                });
+
+            modelBuilder.Entity("EraSwiataLegend.Domain.Entities.WorldMap", b =>
+                {
+                    b.Navigation("DrawingStrokes");
+
+                    b.Navigation("ImageLayers");
+
+                    b.Navigation("Markers");
                 });
 #pragma warning restore 612, 618
         }

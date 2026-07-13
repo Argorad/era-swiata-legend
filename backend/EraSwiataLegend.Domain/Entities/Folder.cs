@@ -13,6 +13,8 @@ public class Folder : BaseEntity
 
     public FolderType Type { get; set; } = FolderType.Normal;
 
+    public bool IsVisibleToPlayers { get; set; }
+
     public World World { get; set; } = null!;
 
     public Folder? ParentFolder { get; set; }
@@ -22,6 +24,9 @@ public class Folder : BaseEntity
 
     public ICollection<Page> Pages { get; set; } =
         new List<Page>();
+
+    public ICollection<FileAttachment> Files { get; set; } =
+        new List<FileAttachment>();
 
     public void Rename(string name)
     {

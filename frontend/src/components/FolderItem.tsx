@@ -246,6 +246,9 @@ export default function FolderItem({
                             <span>
                                 {folder.name}
                             </span>
+                            {!folder.isVisibleToPlayers && folder.type === 0 && (
+                                <span className="folder-private-badge" title="Tylko MG/Admin" aria-label="Folder prywatny">🔒</span>
+                            )}
                         </button>
 
                         {!isSystemFolder && (

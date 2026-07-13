@@ -6,7 +6,10 @@ import "./WorldManagement.css";
 
 interface Props {
     worlds: World[];
+    isLoading: boolean;
+    error: string | null;
     selectedWorldId: string | null;
+    onReload: () => void;
     onSelect: (world: World) => void;
     onCreateWorld: (
         name: string,
@@ -22,7 +25,10 @@ interface Props {
 
 export default function WorldList({
     worlds,
+    isLoading,
+    error,
     selectedWorldId,
+    onReload,
     onSelect,
     onCreateWorld,
     onArchiveWorld,
@@ -65,7 +71,18 @@ export default function WorldList({
                 </button>
             </div>
 
-            {activeWorlds.length === 0 ? (
+            {isLoading ? (
+                <p className="sidebar-muted">
+                    Wczytywanie światów...
+                </p>
+            ) : error ? (
+                <div className="world-list-error" role="alert">
+                    <p>{error}</p>
+                    <button type="button" onClick={onReload}>
+                        Spróbuj ponownie
+                    </button>
+                </div>
+            ) : activeWorlds.length === 0 ? (
                 <p className="sidebar-muted">
                     Brak aktywnych światów.
                 </p>

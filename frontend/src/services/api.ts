@@ -1,5 +1,14 @@
 import axios from "axios";
 
+const configuredApiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL?.trim();
+
+export const apiBaseUrl = (
+    configuredApiBaseUrl ||
+    `http://${window.location.hostname}:5186`
+).replace(/\/+$/, "");
+
 export const api = axios.create({
-    baseURL: "http://192.168.1.63:5186"
+    baseURL: apiBaseUrl,
+    timeout: 15000,
 });

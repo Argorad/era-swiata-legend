@@ -2,6 +2,7 @@ using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Application.Pages.Commands;
 using EraSwiataLegend.Application.Pages.DTOs;
 using EraSwiataLegend.Domain.Entities;
+using EraSwiataLegend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Application.Pages.Handlers;
@@ -19,18 +20,26 @@ public sealed class CreatePageCommandHandler
         CreatePageCommand command,
         CancellationToken cancellationToken = default)
     {
-        var folderExists = await _dbContext.Folders
-            .AnyAsync(
+        var folderType = await _dbContext.Folders
+            .Where(
                 folder =>
                     folder.Id == command.FolderId &&
-                    folder.WorldId == command.WorldId,
-                cancellationToken);
+                    folder.WorldId == command.WorldId)
+            .Select(folder => (FolderType?)folder.Type)
+            .SingleOrDefaultAsync(cancellationToken);
 
-        if (!folderExists)
+        if (folderType is null)
         {
             return new CreatePageResult(
                 null,
                 "FolderNotFound");
+        }
+
+        if (folderType != FolderType.Normal)
+        {
+            return new CreatePageResult(
+                null,
+                "SystemFolderCannotContainNewPage");
         }
 
         var page = new Page
@@ -48,6 +57,7 @@ public sealed class CreatePageCommandHandler
             page.Id,
             page.WorldId,
             page.FolderId,
+            page.PreviousFolderId,
             page.Title,
             page.Content,
             page.CreatedAt,

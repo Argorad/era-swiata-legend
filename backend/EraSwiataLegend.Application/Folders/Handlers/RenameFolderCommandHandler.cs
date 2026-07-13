@@ -52,6 +52,7 @@ public sealed class RenameFolderCommandHandler
             folder.ParentFolderId,
             folder.Name,
             folder.Type,
+            folder.IsVisibleToPlayers,
             folder.CreatedAt,
             folder.UpdatedAt);
 

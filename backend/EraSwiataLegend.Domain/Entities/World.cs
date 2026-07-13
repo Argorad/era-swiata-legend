@@ -18,6 +18,24 @@ public class World : BaseEntity
     public ICollection<Page> Pages { get; set; } =
         new List<Page>();
 
+    public ICollection<FileAttachment> Files { get; set; } =
+        new List<FileAttachment>();
+
+    public ICollection<MapMarker> MapMarkers { get; set; } =
+        new List<MapMarker>();
+
+    public ICollection<WorldMap> Maps { get; set; } =
+        new List<WorldMap>();
+
+    public ICollection<MarkerCategory> MarkerCategories { get; set; } =
+        new List<MarkerCategory>();
+
+    public ICollection<MapImageLayer> MapImageLayers { get; set; } =
+        new List<MapImageLayer>();
+
+    public ICollection<MapDrawingStroke> MapDrawingStrokes { get; set; } =
+        new List<MapDrawingStroke>();
+
     public void Archive()
     {
         if (Status == WorldStatus.Archived)

@@ -1,69 +1,169 @@
 import { useEffect, useState } from "react";
+import FantasyCityBackdrop from "../components/FantasyCityBackdrop";
+import AiReadinessPanel from "../components/AiReadinessPanel";
 import FolderContent from "../components/FolderContent";
 import FolderList from "../components/FolderList";
+import GlobalSearch from "../components/GlobalSearch";
+import WorldMap from "../components/WorldMap";
 import WorldList from "../components/WorldList";
 import { api } from "../services/api";
 import type { Folder } from "../types/Folder";
+import type { Page } from "../types/Page";
+import type { SearchResult } from "../types/SearchResult";
 import type { World } from "../types/World";
 import "./HomePage.css";
+import "../components/V1Modules.css";
 
 export default function HomePage() {
+    const [activeModule, setActiveModule] = useState<
+        "knowledge" | "map" | "ai"
+    >("knowledge");
     const [worlds, setWorlds] = useState<World[]>([]);
+    const [isWorldsLoading, setIsWorldsLoading] = useState(true);
+    const [worldsError, setWorldsError] = useState<string | null>(null);
+    const [worldsReloadKey, setWorldsReloadKey] = useState(0);
     const [folders, setFolders] = useState<Folder[]>([]);
     const [selectedWorld, setSelectedWorld] =
         useState<World | null>(null);
     const [selectedFolderId, setSelectedFolderId] =
         useState<string | null>(null);
+    const [pages, setPages] = useState<Page[]>([]);
+    const [selectedPageId, setSelectedPageId] =
+        useState<string | null>(null);
+    const [isPagesLoading, setIsPagesLoading] =
+        useState(false);
+    const [pagesError, setPagesError] =
+        useState<string | null>(null);
+    const [pagesReloadKey, setPagesReloadKey] =
+        useState(0);
 
     const selectedFolder =
         folders.find(
             (folder) => folder.id === selectedFolderId,
         ) ?? null;
 
+    const selectedPage =
+        pages.find(
+            (page) => page.id === selectedPageId,
+        ) ?? null;
+
     useEffect(() => {
         api.get<World[]>("/worlds")
-            .then((response) =>
-                setWorlds(response.data),
-            )
-            .catch((error) =>
+            .then((response) => {
+                setWorlds(response.data);
+                setWorldsError(null);
+            })
+            .catch((error) => {
                 console.error(
                     "Nie udało się pobrać światów:",
                     error,
-                ),
-            );
-    }, []);
+                );
+                setWorldsError(
+                    "Nie udało się połączyć z API i pobrać światów.",
+                );
+            })
+            .finally(() => setIsWorldsLoading(false));
+    }, [worldsReloadKey]);
 
     useEffect(() => {
         if (!selectedWorld) {
-            setFolders([]);
-            setSelectedFolderId(null);
             return;
         }
 
-        void loadFolders(selectedWorld.id);
+        const loadFolders = async () => {
+            try {
+                const response = await api.get<Folder[]>(
+                    `/worlds/${selectedWorld.id}/folders`,
+                );
+
+                setFolders(response.data);
+            } catch (error) {
+                console.error(
+                    "Nie udało się pobrać folderów:",
+                    error,
+                );
+
+                setFolders([]);
+                setSelectedFolderId(null);
+            }
+        };
+
+        void loadFolders();
     }, [selectedWorld]);
 
-    const loadFolders = async (worldId: string) => {
-        try {
-            const response = await api.get<Folder[]>(
-                `/worlds/${worldId}/folders`,
-            );
-
-            setFolders(response.data);
-        } catch (error) {
-            console.error(
-                "Nie udało się pobrać folderów:",
-                error,
-            );
-
-            setFolders([]);
-            setSelectedFolderId(null);
+    useEffect(() => {
+        if (!selectedWorld || !selectedFolderId) {
+            return;
         }
+
+        let isCurrentRequest = true;
+
+        const loadPages = async () => {
+            try {
+                const response = await api.get<Page[]>(
+                    `/worlds/${selectedWorld.id}/folders/${selectedFolderId}/pages`,
+                );
+
+                if (!isCurrentRequest) {
+                    return;
+                }
+
+                setPages(response.data);
+                setPagesError(null);
+            } catch {
+                if (!isCurrentRequest) {
+                    return;
+                }
+
+                setPages([]);
+                setPagesError(
+                    "Nie udało się pobrać stron tego folderu.",
+                );
+            } finally {
+                if (isCurrentRequest) {
+                    setIsPagesLoading(false);
+                }
+            }
+        };
+
+        void loadPages();
+
+        return () => {
+            isCurrentRequest = false;
+        };
+    }, [selectedWorld, selectedFolderId, pagesReloadKey]);
+
+    const clearPageState = () => {
+        setPages([]);
+        setSelectedPageId(null);
+        setIsPagesLoading(false);
+        setPagesError(null);
     };
 
     const handleSelectWorld = (world: World) => {
         setSelectedWorld(world);
+        setActiveModule("knowledge");
         setSelectedFolderId(null);
+        clearPageState();
+    };
+
+    const handleSelectFolder = (folderId: string) => {
+        if (folderId === selectedFolderId) {
+            setSelectedPageId(null);
+            return;
+        }
+
+        setSelectedFolderId(folderId);
+        setPages([]);
+        setSelectedPageId(null);
+        setPagesError(null);
+        setIsPagesLoading(true);
+    };
+
+    const handleReloadPages = () => {
+        setPagesError(null);
+        setIsPagesLoading(true);
+        setPagesReloadKey((currentKey) => currentKey + 1);
     };
 
     const handleCreateWorld = async (
@@ -85,6 +185,7 @@ export default function HomePage() {
 
         setSelectedWorld(response.data);
         setSelectedFolderId(null);
+        clearPageState();
 
         return response.data;
     };
@@ -108,6 +209,7 @@ export default function HomePage() {
             setSelectedWorld(null);
             setSelectedFolderId(null);
             setFolders([]);
+            clearPageState();
         }
     };
 
@@ -199,95 +301,282 @@ export default function HomePage() {
         );
     };
 
+    const handleCreatePage = async (
+        title: string,
+        content: string,
+    ): Promise<Page> => {
+        if (!selectedWorld || !selectedFolderId) {
+            throw new Error("Nie wybrano folderu.");
+        }
+
+        const response = await api.post<Page>(
+            `/worlds/${selectedWorld.id}/folders/${selectedFolderId}/pages`,
+            {
+                title,
+                content,
+            },
+        );
+
+        setPages((currentPages) =>
+            [...currentPages, response.data].sort(
+                (left, right) =>
+                    left.title.localeCompare(
+                        right.title,
+                        "pl",
+                    ),
+            ),
+        );
+        setSelectedPageId(response.data.id);
+
+        return response.data;
+    };
+
+    const handleUpdatePage = async (
+        title: string,
+        content: string,
+    ) => {
+        if (!selectedWorld || !selectedPage) return;
+        const response = await api.put<Page>(
+            `/worlds/${selectedWorld.id}/pages/${selectedPage.id}`,
+            { title, content },
+        );
+        setPages((current) =>
+            current.map((page) =>
+                page.id === response.data.id
+                    ? response.data
+                    : page,
+            ),
+        );
+    };
+
+    const runPageMove = async (
+        path: string,
+        payload?: object,
+    ) => {
+        if (!selectedWorld || !selectedPage) return;
+        const response = await api.patch<Page>(
+            `/worlds/${selectedWorld.id}/pages/${selectedPage.id}/${path}`,
+            payload ?? {},
+        );
+        setPages((current) =>
+            response.data.folderId === selectedFolderId
+                ? current.map((page) =>
+                      page.id === response.data.id
+                          ? response.data
+                          : page,
+                  )
+                : current.filter(
+                      (page) => page.id !== response.data.id,
+                  ),
+        );
+        if (response.data.folderId !== selectedFolderId) {
+            setSelectedPageId(null);
+        }
+    };
+
+    const handleDeletePage = async () => {
+        if (!selectedWorld || !selectedPage) return;
+        await api.delete(
+            `/worlds/${selectedWorld.id}/pages/${selectedPage.id}`,
+        );
+        setPages((current) =>
+            current.filter((page) => page.id !== selectedPage.id),
+        );
+        setSelectedPageId(null);
+    };
+
+    const navigateToResult = (result: SearchResult) => {
+        const world = worlds.find(
+            (item) => item.id === result.worldId,
+        );
+        if (!world) return;
+
+        setActiveModule("knowledge");
+        setSelectedWorld(world);
+        setSelectedFolderId(result.folderId);
+        setPages([]);
+        setPagesError(null);
+        setSelectedPageId(result.pageId);
+        setIsPagesLoading(Boolean(result.folderId));
+    };
+
+    const openMapLink = (
+        folderId: string,
+        pageId?: string | null,
+    ) => {
+        setActiveModule("knowledge");
+        setSelectedFolderId(folderId);
+        setPages([]);
+        setSelectedPageId(pageId ?? null);
+        setIsPagesLoading(true);
+    };
+
     return (
         <div className="app-shell">
-            <header className="app-header">
-                <div className="brand-emblem">ESL</div>
+            <FantasyCityBackdrop />
 
-                <div className="brand-copy">
-                    <span className="brand-kicker">
-                        Kroniki kampanii
-                    </span>
+            <div className="app-interface">
+                <header className="app-header">
+                    <div className="brand-emblem">ESL</div>
 
-                    <strong>Era Świata Legend</strong>
-                </div>
+                    <div className="brand-copy">
+                        <span className="brand-kicker">
+                            Kroniki kampanii
+                        </span>
 
-                <div className="header-ornament">
-                    ◆
-                </div>
-
-                <div className="active-world">
-                    <span>Aktywny świat</span>
-
-                    <strong>
-                        {selectedWorld?.name ??
-                            "Nie wybrano"}
-                    </strong>
-                </div>
-            </header>
-
-            <div className="app-workspace">
-                <aside className="app-sidebar">
-                    <WorldList
-                        worlds={worlds}
-                        selectedWorldId={
-                            selectedWorld?.id ?? null
-                        }
-                        onSelect={handleSelectWorld}
-                        onCreateWorld={
-                            handleCreateWorld
-                        }
-                        onArchiveWorld={
-                            handleArchiveWorld
-                        }
-                        onRestoreWorld={
-                            handleRestoreWorld
-                        }
-                    />
-
-                    <div className="sidebar-divider">
-                        <span>✦</span>
+                        <strong>Era Świata Legend</strong>
                     </div>
 
-                    <FolderList
-                        key={
-                            selectedWorld?.id ??
-                            "no-world"
-                        }
-                        folders={folders}
-                        worldName={
-                            selectedWorld?.name ?? null
-                        }
-                        selectedFolderId={
-                            selectedFolderId
-                        }
-                        onSelectFolder={
-                            setSelectedFolderId
-                        }
-                        onCreateFolder={
-                            handleCreateFolder
-                        }
-                        onRenameFolder={
-                            handleRenameFolder
-                        }
-                        onMoveFolder={
-                            handleMoveFolder
-                        }
-                    />
-                </aside>
+                    <div className="header-ornament">
+                        ◆
+                    </div>
 
-                <main className="app-content">
-                    <FolderContent
-                        worldName={
-                            selectedWorld?.name ?? null
-                        }
-                        folder={selectedFolder}
-                        folders={folders}
-                        onSelectFolder={
-                            setSelectedFolderId
-                        }
+                    <GlobalSearch
+                        activeWorldId={selectedWorld?.id ?? null}
+                        onNavigate={navigateToResult}
                     />
-                </main>
+
+                    <nav className="module-navigation" aria-label="Moduły aplikacji">
+                        <button type="button" className={activeModule === "knowledge" ? "is-active" : ""} onClick={() => setActiveModule("knowledge")}>Wiedza</button>
+                        <button type="button" className={activeModule === "map" ? "is-active" : ""} onClick={() => setActiveModule("map")} disabled={!selectedWorld}>Mapa</button>
+                        <button type="button" className={activeModule === "ai" ? "is-active" : ""} onClick={() => setActiveModule("ai")}>AI</button>
+                    </nav>
+
+                    <div className="active-world">
+                        <span>Aktywny świat</span>
+
+                        <strong>
+                            {selectedWorld?.name ??
+                                "Nie wybrano"}
+                        </strong>
+                    </div>
+                </header>
+
+                <div className="app-workspace">
+                    <aside className="app-sidebar">
+                        <WorldList
+                            worlds={worlds}
+                            isLoading={isWorldsLoading}
+                            error={worldsError}
+                            selectedWorldId={
+                                selectedWorld?.id ?? null
+                            }
+                            onReload={() => {
+                                setWorldsError(null);
+                                setIsWorldsLoading(true);
+                                setWorldsReloadKey(
+                                    (current) => current + 1,
+                                );
+                            }}
+                            onSelect={handleSelectWorld}
+                            onCreateWorld={
+                                handleCreateWorld
+                            }
+                            onArchiveWorld={
+                                handleArchiveWorld
+                            }
+                            onRestoreWorld={
+                                handleRestoreWorld
+                            }
+                        />
+
+                        <div className="sidebar-divider">
+                            <span>✦</span>
+                        </div>
+
+                        <FolderList
+                            key={
+                                selectedWorld?.id ??
+                                "no-world"
+                            }
+                            folders={folders}
+                            worldName={
+                                selectedWorld?.name ?? null
+                            }
+                            selectedFolderId={
+                                selectedFolderId
+                            }
+                            onSelectFolder={
+                                handleSelectFolder
+                            }
+                            onCreateFolder={
+                                handleCreateFolder
+                            }
+                            onRenameFolder={
+                                handleRenameFolder
+                            }
+                            onMoveFolder={
+                                handleMoveFolder
+                            }
+                        />
+                    </aside>
+
+                    <main className="app-content">
+                        {activeModule === "knowledge" && selectedWorld?.description.trim() && (
+                            <section
+                                className="world-description-card"
+                                aria-label="Opis aktywnego świata"
+                            >
+                                <span>O świecie</span>
+                                <p>
+                                    {selectedWorld.description}
+                                </p>
+                            </section>
+                        )}
+
+                        {activeModule === "knowledge" && <FolderContent
+                            worldName={
+                                selectedWorld?.name ?? null
+                            }
+                            worldId={selectedWorld?.id ?? null}
+                            folder={selectedFolder}
+                            folders={folders}
+                            pages={pages}
+                            selectedPage={selectedPage}
+                            isPagesLoading={isPagesLoading}
+                            pagesError={pagesError}
+                            onSelectFolder={
+                                handleSelectFolder
+                            }
+                            onSelectPage={setSelectedPageId}
+                            onBackToFolder={() =>
+                                setSelectedPageId(null)
+                            }
+                            onCreatePage={handleCreatePage}
+                            onReloadPages={handleReloadPages}
+                            onUpdatePage={handleUpdatePage}
+                            onMovePage={(folderId) =>
+                                runPageMove("move", {
+                                    destinationFolderId: folderId,
+                                })
+                            }
+                            onArchivePage={() =>
+                                runPageMove("archive")
+                            }
+                            onTrashPage={() =>
+                                runPageMove("trash")
+                            }
+                            onRestorePage={() =>
+                                runPageMove("restore", {
+                                    destinationFolderId: null,
+                                })
+                            }
+                            onDeletePage={handleDeletePage}
+                        />}
+                        {activeModule === "map" && selectedWorld && (
+                            <WorldMap
+                                worldId={selectedWorld.id}
+                                worldName={selectedWorld.name}
+                                folders={folders}
+                                pages={pages}
+                                onOpenFolder={openMapLink}
+                            />
+                        )}
+                        {activeModule === "ai" && (
+                            <AiReadinessPanel />
+                        )}
+                    </main>
+                </div>
             </div>
         </div>
     );
