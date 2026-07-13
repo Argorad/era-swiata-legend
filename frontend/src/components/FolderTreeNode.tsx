@@ -6,6 +6,11 @@ interface Props {
     folder: Folder;
     folders: Folder[];
     level: number;
+    selectedFolderId: string | null;
+    onSelectFolder: (folderId: string) => void;
+    onCreateSubfolder: (
+        parentFolderId: string,
+    ) => void;
     onRenameFolder: (
         folderId: string,
         name: string,
@@ -20,10 +25,14 @@ export default function FolderTreeNode({
     folder,
     folders,
     level,
+    selectedFolderId,
+    onSelectFolder,
+    onCreateSubfolder,
     onRenameFolder,
     onMoveFolder,
 }: Props) {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] =
+        useState(true);
 
     const childFolders = folders
         .filter(
@@ -41,62 +50,28 @@ export default function FolderTreeNode({
             );
         });
 
-    const hasChildren = childFolders.length > 0;
+    const hasChildren =
+        childFolders.length > 0;
+
+    const treeStyle = {
+        "--tree-level": level,
+    } as React.CSSProperties;
 
     return (
         <li
-            style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-            }}
+            className={`folder-tree-node${
+                level > 0
+                    ? " folder-tree-node--nested"
+                    : ""
+            }`}
+            style={treeStyle}
         >
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "stretch",
-                    marginLeft: `${level * 24}px`,
-                    position: "relative",
-                }}
-            >
-                {level > 0 && (
-                    <div
-                        style={{
-                            position: "absolute",
-                            left: "-14px",
-                            top: 0,
-                            bottom: 0,
-                            width: "1px",
-                            background: "#d8d8d8",
-                        }}
-                    />
-                )}
-
-                {level > 0 && (
-                    <div
-                        style={{
-                            position: "absolute",
-                            left: "-14px",
-                            top: "25px",
-                            width: "14px",
-                            height: "1px",
-                            background: "#d8d8d8",
-                        }}
-                    />
-                )}
-
-                <div
-                    style={{
-                        width: "28px",
-                        flexShrink: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                    }}
-                >
-                    {hasChildren ? (
+            <div className="folder-tree-line">
+                <div className="folder-tree-toggle-slot">
+                    {hasChildren && (
                         <button
                             type="button"
+                            className="folder-tree-toggle"
                             aria-label={
                                 isExpanded
                                     ? "Zwiń folder"
@@ -104,64 +79,69 @@ export default function FolderTreeNode({
                             }
                             onClick={() =>
                                 setIsExpanded(
-                                    (current) => !current,
+                                    (current) =>
+                                        !current,
                                 )
                             }
-                            style={{
-                                width: "24px",
-                                height: "24px",
-                                padding: 0,
-                                border: "none",
-                                background: "transparent",
-                                color: "#555",
-                                cursor: "pointer",
-                                fontSize: "14px",
-                            }}
                         >
-                            {isExpanded ? "▼" : "▶"}
+                            {isExpanded
+                                ? "−"
+                                : "+"}
                         </button>
-                    ) : (
-                        <span
-                            style={{
-                                width: "24px",
-                                height: "24px",
-                            }}
-                        />
                     )}
                 </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <FolderItem
-                        folder={folder}
-                        folders={folders}
-                        onRenameFolder={onRenameFolder}
-                        onMoveFolder={onMoveFolder}
-                    />
-                </div>
+                <FolderItem
+                    folder={folder}
+                    folders={folders}
+                    isSelected={
+                        selectedFolderId ===
+                        folder.id
+                    }
+                    onSelectFolder={
+                        onSelectFolder
+                    }
+                    onCreateSubfolder={
+                        onCreateSubfolder
+                    }
+                    onRenameFolder={
+                        onRenameFolder
+                    }
+                    onMoveFolder={onMoveFolder}
+                />
             </div>
 
             {hasChildren && isExpanded && (
-                <ul
-                    style={{
-                        listStyle: "none",
-                        margin: 0,
-                        padding: 0,
-                    }}
-                >
-                    {childFolders.map((childFolder) => (
-                        <FolderTreeNode
-                            key={childFolder.id}
-                            folder={childFolder}
-                            folders={folders}
-                            level={level + 1}
-                            onRenameFolder={
-                                onRenameFolder
-                            }
-                            onMoveFolder={
-                                onMoveFolder
-                            }
-                        />
-                    ))}
+                <ul className="folder-tree-children">
+                    {childFolders.map(
+                        (childFolder) => (
+                            <FolderTreeNode
+                                key={
+                                    childFolder.id
+                                }
+                                folder={
+                                    childFolder
+                                }
+                                folders={folders}
+                                level={level + 1}
+                                selectedFolderId={
+                                    selectedFolderId
+                                }
+                                onSelectFolder={
+                                    onSelectFolder
+                                }
+                                onCreateSubfolder={
+                                    onCreateSubfolder
+                                }
+                                onRenameFolder={
+                                    onRenameFolder
+                                }
+                                onMoveFolder={
+                                    onMoveFolder
+                                }
+                            />
+                        ),
+                    )}
                 </ul>
             )}
         </li>

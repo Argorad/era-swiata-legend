@@ -1,58 +1,200 @@
+import { useState } from "react";
 import type { World } from "../types/World";
+import WorldArchiveDialog from "./WorldArchiveDialog";
+import WorldCreateDialog from "./WorldCreateDialog";
+import "./WorldManagement.css";
 
 interface Props {
     worlds: World[];
     selectedWorldId: string | null;
     onSelect: (world: World) => void;
+    onCreateWorld: (
+        name: string,
+        description: string,
+    ) => Promise<World>;
+    onArchiveWorld: (
+        worldId: string,
+    ) => Promise<void>;
+    onRestoreWorld: (
+        worldId: string,
+    ) => Promise<void>;
 }
 
 export default function WorldList({
     worlds,
     selectedWorldId,
     onSelect,
+    onCreateWorld,
+    onArchiveWorld,
+    onRestoreWorld,
 }: Props) {
-    return (
-        <section>
-            <h2 style={{ marginTop: 0 }}>Światy</h2>
+    const [isCreating, setIsCreating] =
+        useState(false);
+    const [isArchiveOpen, setIsArchiveOpen] =
+        useState(false);
+    const [worldToArchive, setWorldToArchive] =
+        useState<World | null>(null);
 
-            {worlds.length === 0 ? (
-                <p style={{ color: "#666" }}>Brak światów.</p>
-            ) : (
-                <ul
-                    style={{
-                        listStyle: "none",
-                        padding: 0,
-                        margin: 0,
-                    }}
+    const activeWorlds = worlds.filter(
+        (world) => world.status === 0,
+    );
+
+    const archivedWorlds = worlds.filter(
+        (world) => world.status === 1,
+    );
+
+    return (
+        <section className="world-list">
+            <div className="world-list-header">
+                <div className="sidebar-section-heading">
+                    <span className="sidebar-section-kicker">
+                        Kampania
+                    </span>
+
+                    <h2>Światy</h2>
+                </div>
+
+                <button
+                    type="button"
+                    className="world-create-button"
+                    onClick={() => setIsCreating(true)}
+                    aria-label="Utwórz świat"
+                    title="Nowy świat"
                 >
-                    {worlds.map((world) => {
-                        const isSelected = selectedWorldId === world.id;
+                    ＋
+                </button>
+            </div>
+
+            {activeWorlds.length === 0 ? (
+                <p className="sidebar-muted">
+                    Brak aktywnych światów.
+                </p>
+            ) : (
+                <ul className="world-list-items">
+                    {activeWorlds.map((world) => {
+                        const isSelected =
+                            selectedWorldId ===
+                            world.id;
 
                         return (
                             <li
                                 key={world.id}
-                                onClick={() => onSelect(world)}
-                                style={{
-                                    cursor: "pointer",
-                                    padding: "12px 14px",
-                                    marginBottom: "8px",
-                                    border: isSelected
-                                        ? "2px solid #646cff"
-                                        : "1px solid #ccc",
-                                    borderRadius: "8px",
-                                    background: isSelected
-                                        ? "#eef0ff"
-                                        : "white",
-                                    fontWeight: isSelected
-                                        ? 700
-                                        : 400,
-                                }}
+                                className="world-list-row"
                             >
-                                {world.name}
+                                <button
+                                    type="button"
+                                    className={`world-list-item${
+                                        isSelected
+                                            ? " world-list-item--selected"
+                                            : ""
+                                    }`}
+                                    onClick={() =>
+                                        onSelect(world)
+                                    }
+                                >
+                                    <span className="world-list-icon">
+                                        ◈
+                                    </span>
+
+                                    <span>
+                                        {world.name}
+                                    </span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="world-row-action"
+                                    onClick={() =>
+                                        setWorldToArchive(
+                                            world,
+                                        )
+                                    }
+                                    aria-label={`Archiwizuj świat ${world.name}`}
+                                    title="Przenieś do archiwum"
+                                >
+                                    ▣
+                                </button>
                             </li>
                         );
                     })}
                 </ul>
+            )}
+
+            {archivedWorlds.length > 0 && (
+                <div className="world-archive-section">
+                    <button
+                        type="button"
+                        className="world-archive-toggle"
+                        onClick={() =>
+                            setIsArchiveOpen(
+                                (current) =>
+                                    !current,
+                            )
+                        }
+                        aria-expanded={isArchiveOpen}
+                    >
+                        <span>
+                            {isArchiveOpen ? "−" : "+"}
+                        </span>
+
+                        Archiwum światów
+
+                        <small>
+                            {archivedWorlds.length}
+                        </small>
+                    </button>
+
+                    {isArchiveOpen && (
+                        <ul className="world-list-items world-list-items--archived">
+                            {archivedWorlds.map(
+                                (world) => (
+                                    <li
+                                        key={world.id}
+                                        className="world-list-row world-list-row--archived"
+                                    >
+                                        <div className="archived-world-name">
+                                            <span>▣</span>
+                                            {world.name}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="world-restore-button"
+                                            onClick={() =>
+                                                void onRestoreWorld(
+                                                    world.id,
+                                                )
+                                            }
+                                            aria-label={`Przywróć świat ${world.name}`}
+                                            title="Przywróć świat"
+                                        >
+                                            ↶
+                                        </button>
+                                    </li>
+                                ),
+                            )}
+                        </ul>
+                    )}
+                </div>
+            )}
+
+            {isCreating && (
+                <WorldCreateDialog
+                    onCreate={onCreateWorld}
+                    onClose={() =>
+                        setIsCreating(false)
+                    }
+                />
+            )}
+
+            {worldToArchive && (
+                <WorldArchiveDialog
+                    world={worldToArchive}
+                    onArchive={onArchiveWorld}
+                    onClose={() =>
+                        setWorldToArchive(null)
+                    }
+                />
             )}
         </section>
     );

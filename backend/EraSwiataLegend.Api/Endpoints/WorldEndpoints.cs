@@ -1,12 +1,14 @@
 using EraSwiataLegend.Application.Worlds.Commands;
 using EraSwiataLegend.Application.Worlds.DTOs;
 using EraSwiataLegend.Application.Worlds.Handlers;
+using EraSwiataLegend.Domain.Enums;
 
 namespace EraSwiataLegend.Api.Endpoints;
 
 public static class WorldEndpoints
 {
-    public static IEndpointRouteBuilder MapWorldEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapWorldEndpoints(
+        this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/worlds")
             .WithTags("Worlds");
@@ -16,11 +18,13 @@ public static class WorldEndpoints
                 GetWorldsQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
-                var result = await handler.HandleAsync(cancellationToken);
+                var result = await handler.HandleAsync(
+                    cancellationToken);
 
                 return Results.Ok(result);
             })
-            .Produces<List<WorldDto>>(StatusCodes.Status200OK);
+            .Produces<List<WorldDto>>(
+                StatusCodes.Status200OK);
 
         group.MapPost("/",
             async (
@@ -33,7 +37,10 @@ public static class WorldEndpoints
                     return Results.ValidationProblem(
                         new Dictionary<string, string[]>
                         {
-                            ["name"] = ["Nazwa świata jest wymagana."]
+                            ["name"] =
+                            [
+                                "Nazwa świata jest wymagana."
+                            ]
                         });
                 }
 
@@ -45,10 +52,66 @@ public static class WorldEndpoints
                     command,
                     cancellationToken);
 
-                return Results.Created($"/worlds/{result.Id}", result);
+                return Results.Created(
+                    $"/worlds/{result.Id}",
+                    result);
             })
-            .Produces<WorldDto>(StatusCodes.Status201Created)
-            .ProducesValidationProblem(StatusCodes.Status400BadRequest);
+            .Produces<WorldDto>(
+                StatusCodes.Status201Created)
+            .ProducesValidationProblem(
+                StatusCodes.Status400BadRequest);
+
+        group.MapPatch("/{worldId:guid}/archive",
+            async (
+                Guid worldId,
+                SetWorldStatusCommandHandler handler,
+                CancellationToken cancellationToken) =>
+            {
+                var command = new SetWorldStatusCommand(
+                    worldId,
+                    WorldStatus.Archived);
+
+                var result = await handler.HandleAsync(
+                    command,
+                    cancellationToken);
+
+                if (result is null)
+                {
+                    return Results.NotFound();
+                }
+
+                return Results.Ok(result);
+            })
+            .Produces<WorldDto>(
+                StatusCodes.Status200OK)
+            .Produces(
+                StatusCodes.Status404NotFound);
+
+        group.MapPatch("/{worldId:guid}/restore",
+            async (
+                Guid worldId,
+                SetWorldStatusCommandHandler handler,
+                CancellationToken cancellationToken) =>
+            {
+                var command = new SetWorldStatusCommand(
+                    worldId,
+                    WorldStatus.Active);
+
+                var result = await handler.HandleAsync(
+                    command,
+                    cancellationToken);
+
+                if (result is null)
+                {
+                    return Results.NotFound();
+                }
+
+                return Results.Ok(result);
+            })
+            .Produces<WorldDto>(
+                StatusCodes.Status200OK)
+            .Produces(
+                StatusCodes.Status404NotFound);
 
         return app;
     }

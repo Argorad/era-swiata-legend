@@ -6,6 +6,11 @@ import MoveFolderDialog from "./MoveFolderDialog";
 interface Props {
     folder: Folder;
     folders: Folder[];
+    isSelected: boolean;
+    onSelectFolder: (folderId: string) => void;
+    onCreateSubfolder: (
+        parentFolderId: string,
+    ) => void;
     onRenameFolder: (
         folderId: string,
         name: string,
@@ -16,17 +21,37 @@ interface Props {
     ) => Promise<void>;
 }
 
+function getFolderIcon(folder: Folder): string {
+    if (folder.type === 1) {
+        return "▣";
+    }
+
+    if (folder.type === 2) {
+        return "⌫";
+    }
+
+    return "◆";
+}
+
 export default function FolderItem({
     folder,
     folders,
+    isSelected,
+    onSelectFolder,
+    onCreateSubfolder,
     onRenameFolder,
     onMoveFolder,
 }: Props) {
-    const [isRenaming, setIsRenaming] = useState(false);
-    const [isMoving, setIsMoving] = useState(false);
-    const [name, setName] = useState(folder.name);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [isRenaming, setIsRenaming] =
+        useState(false);
+    const [isMoving, setIsMoving] =
+        useState(false);
+    const [name, setName] =
+        useState(folder.name);
+    const [isSaving, setIsSaving] =
+        useState(false);
+    const [error, setError] =
+        useState<string | null>(null);
 
     const isSystemFolder =
         folder.type === 1 || folder.type === 2;
@@ -38,13 +63,6 @@ export default function FolderItem({
     const trashFolder = folders.find(
         (item) => item.type === 2,
     );
-
-    const icon =
-        folder.type === 1
-            ? "📦"
-            : folder.type === 2
-              ? "🗑️"
-              : "📁";
 
     const handleStartRename = () => {
         setName(folder.name);
@@ -62,7 +80,9 @@ export default function FolderItem({
         const trimmedName = name.trim();
 
         if (!trimmedName) {
-            setError("Nazwa folderu jest wymagana.");
+            setError(
+                "Nazwa folderu jest wymagana.",
+            );
             return;
         }
 
@@ -91,11 +111,11 @@ export default function FolderItem({
     };
 
     const moveToArchive = async () => {
-        if (!archiveFolder) {
-            return;
-        }
-
-        if (folder.parentFolderId === archiveFolder.id) {
+        if (
+            !archiveFolder ||
+            folder.parentFolderId ===
+                archiveFolder.id
+        ) {
             return;
         }
 
@@ -106,11 +126,11 @@ export default function FolderItem({
     };
 
     const moveToTrash = async () => {
-        if (!trashFolder) {
-            return;
-        }
-
-        if (folder.parentFolderId === trashFolder.id) {
+        if (
+            !trashFolder ||
+            folder.parentFolderId ===
+                trashFolder.id
+        ) {
             return;
         }
 
@@ -118,71 +138,61 @@ export default function FolderItem({
             `Przenieść folder „${folder.name}” wraz z całą zawartością do kosza?`,
         );
 
-        if (!confirmed) {
-            return;
+        if (confirmed) {
+            await onMoveFolder(
+                folder.id,
+                trashFolder.id,
+            );
         }
-
-        await onMoveFolder(
-            folder.id,
-            trashFolder.id,
-        );
     };
+
+    const rowClassName = [
+        "folder-row",
+        isSelected
+            ? "folder-row--selected"
+            : "",
+        isSystemFolder
+            ? "folder-row--system"
+            : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
         <>
-            <div
-                style={{
-                    minHeight: "50px",
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "6px 10px",
-                    marginBottom: "6px",
-                    border: "1px solid #d5d5d5",
-                    borderRadius: "7px",
-                    background: "white",
-                    boxSizing: "border-box",
-                }}
-            >
+            <div className={rowClassName}>
                 {isRenaming ? (
-                    <div style={{ width: "100%" }}>
-                        <div
-                            style={{
-                                display: "flex",
-                                gap: "8px",
-                            }}
-                        >
+                    <div className="folder-rename">
+                        <div className="folder-rename-controls">
                             <input
                                 type="text"
                                 value={name}
                                 onChange={(event) =>
                                     setName(
-                                        event.target.value,
+                                        event.target
+                                            .value,
                                     )
                                 }
-                                onKeyDown={(event) => {
+                                onKeyDown={(
+                                    event,
+                                ) => {
                                     if (
-                                        event.key === "Enter"
+                                        event.key ===
+                                        "Enter"
                                     ) {
                                         event.preventDefault();
                                         void handleSave();
                                     }
 
                                     if (
-                                        event.key === "Escape"
+                                        event.key ===
+                                        "Escape"
                                     ) {
                                         handleCancelRename();
                                     }
                                 }}
                                 autoFocus
                                 disabled={isSaving}
-                                style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    padding: "9px",
-                                    border:
-                                        "1px solid #bbb",
-                                    borderRadius: "6px",
-                                }}
                             />
 
                             <button
@@ -191,52 +201,60 @@ export default function FolderItem({
                                     void handleSave()
                                 }
                                 disabled={isSaving}
+                                aria-label="Zapisz nazwę"
                             >
-                                {isSaving ? "..." : "💾"}
+                                {isSaving
+                                    ? "…"
+                                    : "✓"}
                             </button>
 
                             <button
                                 type="button"
-                                onClick={handleCancelRename}
+                                onClick={
+                                    handleCancelRename
+                                }
                                 disabled={isSaving}
+                                aria-label="Anuluj zmianę nazwy"
                             >
-                                ❌
+                                ×
                             </button>
                         </div>
 
                         {error && (
-                            <p
-                                style={{
-                                    margin: "8px 0 0",
-                                    color: "#b00020",
-                                }}
-                            >
+                            <p className="folder-inline-error">
                                 {error}
                             </p>
                         )}
                     </div>
                 ) : (
-                    <div
-                        style={{
-                            width: "100%",
-                            display: "flex",
-                            justifyContent:
-                                "space-between",
-                            alignItems: "center",
-                            gap: "12px",
-                        }}
-                    >
-                        <span
-                            style={{
-                                minWidth: 0,
-                                overflowWrap: "anywhere",
-                            }}
+                    <>
+                        <button
+                            type="button"
+                            className="folder-name-button"
+                            onClick={() =>
+                                onSelectFolder(
+                                    folder.id,
+                                )
+                            }
                         >
-                            {icon} {folder.name}
-                        </span>
+                            <span className="folder-name-icon">
+                                {getFolderIcon(
+                                    folder,
+                                )}
+                            </span>
+
+                            <span>
+                                {folder.name}
+                            </span>
+                        </button>
 
                         {!isSystemFolder && (
                             <FolderActions
+                                onCreateSubfolder={() =>
+                                    onCreateSubfolder(
+                                        folder.id,
+                                    )
+                                }
                                 onRename={
                                     handleStartRename
                                 }
@@ -251,7 +269,7 @@ export default function FolderItem({
                                 }
                             />
                         )}
-                    </div>
+                    </>
                 )}
             </div>
 
@@ -260,7 +278,9 @@ export default function FolderItem({
                     folder={folder}
                     folders={folders}
                     onMove={onMoveFolder}
-                    onClose={() => setIsMoving(false)}
+                    onClose={() =>
+                        setIsMoving(false)
+                    }
                 />
             )}
         </>

@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Infrastructure.Persistence;
 
-public class ApplicationDbContext : DbContext, IApplicationDbContext
+public class ApplicationDbContext
+    : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options)
@@ -19,7 +20,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<Page> Pages => Set<Page>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(
+        ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
@@ -31,6 +33,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.Property(world => world.Description)
                 .HasMaxLength(4000);
+
+            entity.Property(world => world.Status)
+                .HasConversion<int>()
+                .HasDefaultValue(WorldStatus.Active)
+                .IsRequired();
         });
 
         modelBuilder.Entity<Folder>(entity =>
@@ -51,7 +58,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.HasOne(folder => folder.ParentFolder)
                 .WithMany(folder => folder.ChildFolders)
-                .HasForeignKey(folder => folder.ParentFolderId)
+                .HasForeignKey(
+                    folder => folder.ParentFolderId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

@@ -1,6 +1,11 @@
-import { useState } from "react";
+import {
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 
 interface Props {
+    onCreateSubfolder: () => void;
     onRename: () => void;
     onMove: () => void;
     onArchive: () => void;
@@ -8,97 +13,122 @@ interface Props {
 }
 
 export default function FolderActions({
+    onCreateSubfolder,
     onRename,
     onMove,
     onArchive,
     onTrash,
 }: Props) {
     const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        const handlePointerDown = (
+            event: PointerEvent,
+        ) => {
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(
+                    event.target as Node,
+                )
+            ) {
+                setIsOpen(false);
+            }
+        };
+
+        window.addEventListener(
+            "pointerdown",
+            handlePointerDown,
+        );
+
+        return () =>
+            window.removeEventListener(
+                "pointerdown",
+                handlePointerDown,
+            );
+    }, [isOpen]);
 
     const runAction = (action: () => void) => {
         setIsOpen(false);
         action();
     };
 
-    const menuButtonStyle: React.CSSProperties = {
-        width: "100%",
-        padding: "10px 12px",
-        textAlign: "left",
-        cursor: "pointer",
-        background: "transparent",
-        border: "none",
-        color: "#222",
-        fontSize: "14px",
-    };
-
     return (
-        <div style={{ position: "relative" }}>
+        <div
+            className="folder-actions"
+            ref={menuRef}
+        >
             <button
                 type="button"
+                className="folder-actions-trigger"
                 aria-label="Akcje folderu"
+                aria-expanded={isOpen}
                 onClick={() =>
-                    setIsOpen((current) => !current)
+                    setIsOpen(
+                        (current) => !current,
+                    )
                 }
-                style={{
-                    width: "36px",
-                    height: "36px",
-                    padding: 0,
-                    fontSize: "20px",
-                    cursor: "pointer",
-                }}
             >
                 ⋮
             </button>
 
             {isOpen && (
-                <div
-                    style={{
-                        position: "absolute",
-                        top: "42px",
-                        right: 0,
-                        zIndex: 20,
-                        minWidth: "210px",
-                        padding: "6px",
-                        border: "1px solid #ccc",
-                        borderRadius: "8px",
-                        background: "white",
-                        boxShadow:
-                            "0 8px 24px rgba(0, 0, 0, 0.18)",
-                    }}
-                >
+                <div className="folder-actions-menu">
                     <button
                         type="button"
-                        onClick={() => runAction(onRename)}
-                        style={menuButtonStyle}
+                        onClick={() =>
+                            runAction(
+                                onCreateSubfolder,
+                            )
+                        }
                     >
-                        ✏️ Zmień nazwę
+                        <span>＋</span>
+                        Nowy podfolder
                     </button>
 
                     <button
                         type="button"
-                        onClick={() => runAction(onMove)}
-                        style={menuButtonStyle}
+                        onClick={() =>
+                            runAction(onRename)
+                        }
                     >
-                        📂 Przenieś...
+                        <span>✎</span>
+                        Zmień nazwę
                     </button>
 
                     <button
                         type="button"
-                        onClick={() => runAction(onArchive)}
-                        style={menuButtonStyle}
+                        onClick={() =>
+                            runAction(onMove)
+                        }
                     >
-                        📦 Archiwizuj
+                        <span>↪</span>
+                        Przenieś...
                     </button>
 
                     <button
                         type="button"
-                        onClick={() => runAction(onTrash)}
-                        style={{
-                            ...menuButtonStyle,
-                            color: "#b00020",
-                        }}
+                        onClick={() =>
+                            runAction(onArchive)
+                        }
                     >
-                        🗑️ Przenieś do kosza
+                        <span>▣</span>
+                        Archiwizuj
+                    </button>
+
+                    <button
+                        type="button"
+                        className="folder-action-danger"
+                        onClick={() =>
+                            runAction(onTrash)
+                        }
+                    >
+                        <span>⌫</span>
+                        Przenieś do kosza
                     </button>
                 </div>
             )}

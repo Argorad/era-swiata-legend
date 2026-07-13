@@ -1,0 +1,397 @@
+.folder-navigation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.folder-create-button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    color: #f1d58c;
+    background: linear-gradient(#6f2226, #3e1417);
+    border: 1px solid #a97935;
+    border-radius: 50%;
+    font-size: 22px;
+    cursor: pointer;
+    transition: 150ms ease;
+}
+
+.folder-create-button:hover:not(:disabled) {
+    color: #fff1c8;
+    border-color: #deb85e;
+    transform: translateY(-1px);
+}
+
+.folder-create-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+
+.folder-tree,
+.folder-tree-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.folder-tree-node {
+    margin: 0;
+}
+
+.folder-tree-line {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 25px minmax(0, 1fr);
+    align-items: center;
+    position: relative;
+    margin-left: calc(
+        var(--tree-level) * 17px
+    );
+}
+
+.folder-tree-node--nested
+    > .folder-tree-line::before {
+    content: "";
+    width: 12px;
+    height: 24px;
+    position: absolute;
+    top: -5px;
+    left: -10px;
+    border-left: 1px solid
+        rgba(198, 154, 69, 0.35);
+    border-bottom: 1px solid
+        rgba(198, 154, 69, 0.35);
+}
+
+.folder-tree-toggle-slot {
+    display: grid;
+    place-items: center;
+}
+
+.folder-tree-toggle {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    color: #bfa878;
+    background: transparent;
+    border: 1px solid
+        rgba(198, 154, 69, 0.28);
+    border-radius: 50%;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.folder-row {
+    min-width: 0;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 3px 0;
+    padding: 3px 4px 3px 7px;
+    color: #d9cdb8;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: 150ms ease;
+}
+
+.folder-row:hover {
+    background: rgba(198, 154, 69, 0.08);
+    border-color: rgba(198, 154, 69, 0.22);
+}
+
+.folder-row--selected {
+    color: #fff1d2;
+    background: linear-gradient(
+        90deg,
+        rgba(111, 32, 36, 0.88),
+        rgba(75, 24, 27, 0.45)
+    );
+    border-color: #966b31;
+    box-shadow: inset 3px 0 0 #d2a64f;
+}
+
+.folder-row--system {
+    color: #bcae95;
+    background: rgba(0, 0, 0, 0.16);
+}
+
+.folder-name-button {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 5px;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+}
+
+.folder-name-button span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.folder-name-icon {
+    flex: 0 0 auto;
+    color: #d1aa5a;
+    font-size: 12px;
+}
+
+.folder-actions {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.folder-actions-trigger {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: #c7b99f;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.folder-actions-trigger:hover,
+.folder-actions-trigger[aria-expanded="true"] {
+    color: #f1d58c;
+    background: rgba(0, 0, 0, 0.24);
+    border-color: rgba(198, 154, 69, 0.36);
+}
+
+.folder-actions-menu {
+    position: absolute;
+    top: 34px;
+    right: 0;
+    z-index: 30;
+    width: 220px;
+    padding: 6px;
+    background: #f3ead6;
+    border: 1px solid #8d642f;
+    border-radius: 4px;
+    box-shadow: 0 14px 30px
+        rgba(0, 0, 0, 0.48);
+}
+
+.folder-actions-menu button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    color: #34221c;
+    background: transparent;
+    border: 0;
+    border-radius: 3px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.folder-actions-menu button:hover {
+    color: #621d20;
+    background: rgba(112, 31, 34, 0.1);
+}
+
+.folder-actions-menu button span {
+    width: 17px;
+    color: #8b2a2d;
+    text-align: center;
+}
+
+.folder-actions-menu .folder-action-danger {
+    color: #8e1f24;
+}
+
+.folder-rename {
+    width: 100%;
+    padding: 3px;
+}
+
+.folder-rename-controls {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr) 30px 30px;
+    gap: 5px;
+}
+
+.folder-rename input {
+    min-width: 0;
+    padding: 7px 8px;
+    color: #2c1e19;
+    background: #f5ecd8;
+    border: 1px solid #b18545;
+    border-radius: 3px;
+}
+
+.folder-rename button {
+    padding: 0;
+    color: #edd292;
+    background: #4b191c;
+    border: 1px solid #9d743a;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.folder-inline-error {
+    margin: 6px 0 0;
+    color: #ffadad;
+    font-size: 12px;
+}
+
+/* Style przygotowane również dla okien folderów. */
+
+.fantasy-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(8, 5, 5, 0.78);
+    backdrop-filter: blur(3px);
+}
+
+.fantasy-dialog {
+    width: min(500px, 100%);
+    position: relative;
+    padding: 36px 32px 28px;
+    color: #34231c;
+    background:
+        linear-gradient(
+            rgba(255, 255, 255, 0.28),
+            transparent
+        ),
+        #eee2c8;
+    border: 2px solid #a57632;
+    border-radius: 3px;
+    box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.65),
+        inset 0 0 40px rgba(101, 64, 27, 0.1);
+}
+
+.fantasy-dialog-ornament {
+    position: absolute;
+    top: -17px;
+    left: 50%;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    color: #efd484;
+    background: #591b1f;
+    border: 2px solid #bd8c3d;
+    transform:
+        translateX(-50%)
+        rotate(45deg);
+}
+
+.fantasy-dialog-ornament span {
+    display: block;
+    transform: rotate(-45deg);
+}
+
+.fantasy-dialog-kicker {
+    color: #89292c;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+}
+
+.fantasy-dialog h3 {
+    margin: 3px 0 8px;
+    color: #3b241d;
+    font: 700 30px/1.2 Georgia,
+        "Times New Roman", serif;
+}
+
+.fantasy-dialog-description,
+.fantasy-dialog-hint {
+    margin: 0 0 20px;
+    color: #695442;
+}
+
+.fantasy-dialog-hint {
+    margin-top: -5px;
+    font-size: 12px;
+}
+
+.fantasy-dialog label {
+    display: block;
+    margin: 14px 0 7px;
+    color: #4e3529;
+    font-weight: 700;
+}
+
+.fantasy-dialog input,
+.fantasy-dialog select {
+    width: 100%;
+    padding: 11px 12px;
+    color: #2d211c;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid #9f7b49;
+    border-radius: 3px;
+    outline: none;
+}
+
+.fantasy-dialog input:focus,
+.fantasy-dialog select:focus {
+    border-color: #76262a;
+    box-shadow: 0 0 0 2px
+        rgba(118, 38, 42, 0.15);
+}
+
+.fantasy-dialog-error {
+    margin: 13px 0 0;
+    color: #9a1f24;
+    font-weight: 600;
+}
+
+.fantasy-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 24px;
+}
+
+.fantasy-button {
+    padding: 10px 17px;
+    border-radius: 3px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.fantasy-button--ghost {
+    color: #4e372c;
+    background: transparent;
+    border: 1px solid #9b784b;
+}
+
+.fantasy-button--primary {
+    color: #f7e9c8;
+    background: linear-gradient(
+        #76262a,
+        #4b171a
+    );
+    border: 1px solid #a87a37;
+}
+
+.fantasy-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}

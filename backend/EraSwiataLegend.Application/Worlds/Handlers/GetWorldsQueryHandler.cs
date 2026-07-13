@@ -11,7 +11,8 @@ public sealed class GetWorldsQueryHandler
 {
     private readonly IApplicationDbContext _context;
 
-    public GetWorldsQueryHandler(IApplicationDbContext context)
+    public GetWorldsQueryHandler(
+        IApplicationDbContext context)
     {
         _context = context;
     }
@@ -34,11 +35,13 @@ public sealed class GetWorldsQueryHandler
     {
         return await _context.Worlds
             .AsNoTracking()
-            .OrderBy(world => world.Name)
+            .OrderBy(world => world.Status)
+            .ThenBy(world => world.Name)
             .Select(world => new WorldDto(
                 world.Id,
                 world.Name,
                 world.Description,
+                world.Status,
                 world.CreatedAt,
                 world.UpdatedAt
             ))

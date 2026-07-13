@@ -10,7 +10,8 @@ public sealed class CreateWorldCommandHandler
 {
     private readonly IApplicationDbContext _dbContext;
 
-    public CreateWorldCommandHandler(IApplicationDbContext dbContext)
+    public CreateWorldCommandHandler(
+        IApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -22,7 +23,8 @@ public sealed class CreateWorldCommandHandler
         var world = new World
         {
             Name = command.Name,
-            Description = command.Description ?? string.Empty
+            Description =
+                command.Description ?? string.Empty
         };
 
         var archiveFolder = new Folder
@@ -43,12 +45,15 @@ public sealed class CreateWorldCommandHandler
         world.Folders.Add(trashFolder);
 
         _dbContext.Worlds.Add(world);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
 
         return new WorldDto(
             world.Id,
             world.Name,
             world.Description,
+            world.Status,
             world.CreatedAt,
             world.UpdatedAt);
     }

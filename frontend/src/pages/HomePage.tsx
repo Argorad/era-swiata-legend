@@ -1,32 +1,42 @@
 import { useEffect, useState } from "react";
-import { api } from "../services/api";
-import type { World } from "../types/World";
-import type { Folder } from "../types/Folder";
-import WorldList from "../components/WorldList";
+import FolderContent from "../components/FolderContent";
 import FolderList from "../components/FolderList";
+import WorldList from "../components/WorldList";
+import { api } from "../services/api";
+import type { Folder } from "../types/Folder";
+import type { World } from "../types/World";
+import "./HomePage.css";
 
 export default function HomePage() {
     const [worlds, setWorlds] = useState<World[]>([]);
     const [folders, setFolders] = useState<Folder[]>([]);
     const [selectedWorld, setSelectedWorld] =
         useState<World | null>(null);
+    const [selectedFolderId, setSelectedFolderId] =
+        useState<string | null>(null);
+
+    const selectedFolder =
+        folders.find(
+            (folder) => folder.id === selectedFolderId,
+        ) ?? null;
 
     useEffect(() => {
         api.get<World[]>("/worlds")
-            .then((response) => {
-                setWorlds(response.data);
-            })
-            .catch((error) => {
+            .then((response) =>
+                setWorlds(response.data),
+            )
+            .catch((error) =>
                 console.error(
                     "Nie udało się pobrać światów:",
                     error,
-                );
-            });
+                ),
+            );
     }, []);
 
     useEffect(() => {
         if (!selectedWorld) {
             setFolders([]);
+            setSelectedFolderId(null);
             return;
         }
 
@@ -47,13 +57,80 @@ export default function HomePage() {
             );
 
             setFolders([]);
+            setSelectedFolderId(null);
         }
+    };
+
+    const handleSelectWorld = (world: World) => {
+        setSelectedWorld(world);
+        setSelectedFolderId(null);
+    };
+
+    const handleCreateWorld = async (
+        name: string,
+        description: string,
+    ): Promise<World> => {
+        const response = await api.post<World>(
+            "/worlds",
+            {
+                name,
+                description,
+            },
+        );
+
+        setWorlds((currentWorlds) => [
+            ...currentWorlds,
+            response.data,
+        ]);
+
+        setSelectedWorld(response.data);
+        setSelectedFolderId(null);
+
+        return response.data;
+    };
+
+    const handleArchiveWorld = async (
+        worldId: string,
+    ) => {
+        const response = await api.patch<World>(
+            `/worlds/${worldId}/archive`,
+        );
+
+        setWorlds((currentWorlds) =>
+            currentWorlds.map((world) =>
+                world.id === worldId
+                    ? response.data
+                    : world,
+            ),
+        );
+
+        if (selectedWorld?.id === worldId) {
+            setSelectedWorld(null);
+            setSelectedFolderId(null);
+            setFolders([]);
+        }
+    };
+
+    const handleRestoreWorld = async (
+        worldId: string,
+    ) => {
+        const response = await api.patch<World>(
+            `/worlds/${worldId}/restore`,
+        );
+
+        setWorlds((currentWorlds) =>
+            currentWorlds.map((world) =>
+                world.id === worldId
+                    ? response.data
+                    : world,
+            ),
+        );
     };
 
     const handleCreateFolder = async (
         name: string,
         parentFolderId: string | null,
-    ) => {
+    ): Promise<Folder> => {
         if (!selectedWorld) {
             throw new Error("Nie wybrano świata.");
         }
@@ -70,6 +147,8 @@ export default function HomePage() {
             ...currentFolders,
             response.data,
         ]);
+
+        return response.data;
     };
 
     const handleRenameFolder = async (
@@ -121,57 +200,69 @@ export default function HomePage() {
     };
 
     return (
-        <main
-            style={{
-                minHeight: "100vh",
-                padding: "24px",
-                background: "#f5f5f5",
-                boxSizing: "border-box",
-            }}
-        >
-            <h1 style={{ marginTop: 0 }}>
-                Era Świata Legend
-            </h1>
+        <div className="app-shell">
+            <header className="app-header">
+                <div className="brand-emblem">ESL</div>
 
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                        "minmax(240px, 300px) minmax(0, 1fr)",
-                    gap: "24px",
-                    alignItems: "start",
-                }}
-            >
-                <aside
-                    style={{
-                        padding: "20px",
-                        background: "white",
-                        border: "1px solid #ddd",
-                        borderRadius: "10px",
-                    }}
-                >
+                <div className="brand-copy">
+                    <span className="brand-kicker">
+                        Kroniki kampanii
+                    </span>
+
+                    <strong>Era Świata Legend</strong>
+                </div>
+
+                <div className="header-ornament">
+                    ◆
+                </div>
+
+                <div className="active-world">
+                    <span>Aktywny świat</span>
+
+                    <strong>
+                        {selectedWorld?.name ??
+                            "Nie wybrano"}
+                    </strong>
+                </div>
+            </header>
+
+            <div className="app-workspace">
+                <aside className="app-sidebar">
                     <WorldList
                         worlds={worlds}
                         selectedWorldId={
                             selectedWorld?.id ?? null
                         }
-                        onSelect={setSelectedWorld}
+                        onSelect={handleSelectWorld}
+                        onCreateWorld={
+                            handleCreateWorld
+                        }
+                        onArchiveWorld={
+                            handleArchiveWorld
+                        }
+                        onRestoreWorld={
+                            handleRestoreWorld
+                        }
                     />
-                </aside>
 
-                <div
-                    style={{
-                        padding: "20px",
-                        background: "white",
-                        border: "1px solid #ddd",
-                        borderRadius: "10px",
-                        minHeight: "300px",
-                    }}
-                >
+                    <div className="sidebar-divider">
+                        <span>✦</span>
+                    </div>
+
                     <FolderList
+                        key={
+                            selectedWorld?.id ??
+                            "no-world"
+                        }
                         folders={folders}
                         worldName={
                             selectedWorld?.name ?? null
+                        }
+                        selectedFolderId={
+                            selectedFolderId
+                        }
+                        onSelectFolder={
+                            setSelectedFolderId
                         }
                         onCreateFolder={
                             handleCreateFolder
@@ -183,8 +274,21 @@ export default function HomePage() {
                             handleMoveFolder
                         }
                     />
-                </div>
+                </aside>
+
+                <main className="app-content">
+                    <FolderContent
+                        worldName={
+                            selectedWorld?.name ?? null
+                        }
+                        folder={selectedFolder}
+                        folders={folders}
+                        onSelectFolder={
+                            setSelectedFolderId
+                        }
+                    />
+                </main>
             </div>
-        </main>
+        </div>
     );
 }

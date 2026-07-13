@@ -12,6 +12,7 @@ public static class DependencyInjection
     {
         services.AddScoped<CreateWorldCommandHandler>();
         services.AddScoped<GetWorldsQueryHandler>();
+        services.AddScoped<SetWorldStatusCommandHandler>();
 
         services.AddScoped<CreateFolderCommandHandler>();
         services.AddScoped<GetFoldersQueryHandler>();
