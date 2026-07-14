@@ -1,27 +1,35 @@
 using EraSwiataLegend.Application.Folders.Commands;
 using EraSwiataLegend.Application.Folders.DTOs;
 using EraSwiataLegend.Application.Folders.Handlers;
+using EraSwiataLegend.Api.Authorization;
 
 namespace EraSwiataLegend.Api.Endpoints;
 
 public static class FolderEndpoints
 {
     public static IEndpointRouteBuilder MapFolderEndpoints(
-        this IEndpointRouteBuilder app)
+        this IEndpointRouteBuilder app,
+        IConfiguration configuration)
     {
         var group = app.MapGroup("/worlds/{worldId:guid}/folders")
             .WithTags("Folders");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            group.RequireAuthorization();
+        }
+
         group.MapGet("/",
             async (
                 Guid worldId,
-                bool playerView,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 GetFoldersQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
                 var folders = await handler.HandleAsync(
                     worldId,
-                    playerView,
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken);
 
                 return Results.Ok(folders);
@@ -76,6 +84,9 @@ public static class FolderEndpoints
                     $"/worlds/{worldId}/folders/{result.Folder!.Id}",
                     result.Folder);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<FolderDto>(StatusCodes.Status201Created)
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
@@ -127,6 +138,9 @@ public static class FolderEndpoints
 
                 return Results.Ok(result.Folder);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<FolderDto>(StatusCodes.Status200OK)
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
@@ -187,6 +201,9 @@ public static class FolderEndpoints
                     _ => Results.Ok(result.Folder)
                 };
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<FolderDto>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);

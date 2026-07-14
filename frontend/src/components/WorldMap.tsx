@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from "react";
+import axios from "axios";
 import { api, apiBaseUrl } from "../services/api";
 import type { Folder } from "../types/Folder";
 import type { FileAttachment } from "../types/FileAttachment";
@@ -11,8 +12,10 @@ import type { SaveWorldMap, WorldMapModel } from "../types/WorldMap";
 import { CategoryDialog, ConfirmDialog, LayerDialog, MapDialog, MarkerDialog } from "./MapGenieDialogs";
 import MapAnnotationEditor from "./MapAnnotationEditor";
 import MapContextMenu from "./MapContextMenu";
+import MapTextDialog, { type MapTextStyle } from "./MapTextDialog";
 import type { MapContextAction } from "./MapContextMenu";
 import { useEditorHistory } from "../hooks/useEditorHistory";
+import { continuesPrimaryDrawingGesture, createLocalDrawingId, hasMeaningfulDrawingDrag, screenToMapWorld, startsPrimaryDrawingGesture } from "../utils/mapDrawingGesture";
 import "./MapGenie.css";
 
 interface Props {
@@ -20,17 +23,27 @@ interface Props {
     worldName: string;
     folders: Folder[];
     pages: Page[];
+    forcePlayerView?: boolean;
     onOpenFolder: (folderId: string, pageId?: string | null) => void;
 }
 
 type MarkerAction = "archive" | "trash" | "restore" | "delete";
-type DrawTool = "pan" | "select" | "pen" | "eraser" | "line" | "arrow" | "rectangle" | "ellipse" | "polygon" | "text";
+type DrawTool = "pan" | "select" | "pen" | "eraser" | "line" | "arrow" | "text";
 interface ConfirmState { kind: "marker"; marker: MapMarker; action: MarkerAction }
 interface MapConfirmState { kind: "map"; map: WorldMapModel }
+interface BaseLayerState { positionX: number; positionY: number; scale: number; rotation: number; opacity: number; isLocked: boolean; isVisible: boolean }
 
 const mapTypeNames = ["Świat", "Region", "Miasto", "Loch"];
 const statusNames = ["Aktywne", "Archiwum", "Trash"];
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const saveErrorMessage = (error: unknown, fallback: string) => {
+    if (!axios.isAxiosError(error)) return fallback;
+    const status = error.response?.status;
+    const serverMessage = typeof error.response?.data === "object" && error.response?.data && "message" in error.response.data
+        ? String(error.response.data.message) : "";
+    return `${fallback}${status ? ` (HTTP ${status})` : ""}${serverMessage ? `: ${serverMessage}` : ""}`;
+};
+const defaultBaseLayer: BaseLayerState = { positionX: 0, positionY: 0, scale: 1, rotation: 0, opacity: 1, isLocked: true, isVisible: true };
 const strokePath = (points: MapStrokePoint[]) => points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
 const renderShape = (tool: string, points: MapStrokePoint[], color: string, width: number, fill: string, opacity: number, dashStyle: string, text: string, fontSize: number, key: string): ReactNode => {
     const first = points[0]; const last = points.at(-1);
@@ -45,7 +58,7 @@ const renderShape = (tool: string, points: MapStrokePoint[], color: string, widt
     return <path key={key} d={strokePath(points)} fill="none" stroke={color} strokeWidth={width} strokeDasharray={dash} opacity={opacity} strokeLinecap="round" strokeLinejoin="round" />;
 };
 
-export default function WorldMap({ worldId, worldName, folders, pages, onOpenFolder }: Props) {
+export default function WorldMap({ worldId, worldName, folders, pages, forcePlayerView, onOpenFolder }: Props) {
     const [maps, setMaps] = useState<WorldMapModel[]>([]);
     const [categories, setCategories] = useState<MarkerCategory[]>([]);
     const [markers, setMarkers] = useState<MapMarker[]>([]);
@@ -54,7 +67,7 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     const [libraryImages, setLibraryImages] = useState<FileAttachment[]>([]);
     const [activeMapId, setActiveMapId] = useState("");
     const [markerStatus, setMarkerStatus] = useState<MapMarkerStatus>(0);
-    const [playerView, setPlayerView] = useState(false);
+    const [manualPlayerView, setManualPlayerView] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [panelOpen, setPanelOpen] = useState(true);
@@ -89,11 +102,15 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     const [drawFill, setDrawFill] = useState("transparent");
     const [drawOpacity, setDrawOpacity] = useState(1);
     const [drawDash, setDrawDash] = useState<"solid" | "dashed" | "dotted">("solid");
-    const [drawText, setDrawText] = useState("Notatka");
-    const [drawFontSize, setDrawFontSize] = useState(24);
+    const drawText = "Notatka";
+    const drawFontSize = 24;
     const [drawTextBorder, setDrawTextBorder] = useState(true);
     const [drawVisibleToPlayers, setDrawVisibleToPlayers] = useState(true);
+    const [createMany, setCreateMany] = useState(false);
     const [currentStroke, setCurrentStroke] = useState<MapStrokePoint[] | null>(null);
+    const [textPosition, setTextPosition] = useState<MapStrokePoint | null>(null);
+    const [baseLayer, setBaseLayer] = useState<BaseLayerState>(defaultBaseLayer);
+    const [deleteBaseConfirm, setDeleteBaseConfirm] = useState(false);
     const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
@@ -105,28 +122,64 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     const dragMarkerRef = useRef<string | null>(null);
     const markerDragStartRef = useRef<MapMarker | null>(null);
     const dragLayerRef = useRef<{ id: string; startX: number; startY: number; x: number; y: number } | null>(null);
+    const drawingPointerRef = useRef<number | null>(null);
+    const baseDragRef = useRef<{ startX: number; startY: number; before: BaseLayerState } | null>(null);
+    const rotationRef = useRef<{ id: string; beforeRotation: number; centerX: number; centerY: number; pointerAngle: number } | null>(null);
     const pendingSavesRef = useRef(new Map<string, () => Promise<void>>());
     const savedDrawingsRef = useRef(new Map<string, MapDrawingStroke>());
     const history = useEditorHistory((message) => { setError(message); setSaveState("failed"); });
     const clearHistory = history.clear;
+    const clearTransientMapState = useCallback(() => {
+        setCurrentStroke(null);
+        drawingPointerRef.current = null;
+        setSelectedAnnotationId(null);
+        setSelectedLayerId(null);
+        setContextMenu(null);
+        dragLayerRef.current = null;
+        baseDragRef.current = null;
+        rotationRef.current = null;
+    }, []);
+
+    const playerView = forcePlayerView ? true : manualPlayerView;
 
     const activeMap = maps.find((map) => map.id === activeMapId) ?? null;
     const selectedAnnotation = drawingStrokes.find((stroke) => stroke.id === selectedAnnotationId) ?? null;
+    const selectedImageLayer = imageLayers.find((layer) => layer.id === selectedLayerId) ?? null;
     const fitScale = Math.min(viewportSize.width / imageSize.width, viewportSize.height / imageSize.height);
     const actualScale = fitScale * zoom;
-    const gridPatternSize = activeMap?.gridStyle === "dots"
-        ? `${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px ${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px, ${activeMap.gridSize}px ${activeMap.gridSize}px`
-        : activeMap?.gridStyle === "hex"
-            ? `${activeMap.gridSize * 1.75}px ${activeMap.gridSize * 3}px`
-            : activeMap
-                ? `${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px ${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px, ${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px ${activeMap.gridSize * (activeMap.gridMajorEvery ?? 5)}px, ${activeMap.gridSize}px ${activeMap.gridSize}px, ${activeMap.gridSize}px ${activeMap.gridSize}px`
-                : undefined;
+    const drawingInputActive = editMode && !playerView && ["pen", "eraser", "line", "arrow", "text"].includes(drawTool);
+    const baseStorageKey = activeMapId ? `mapgenie:base-layer:${worldId}:${activeMapId}` : "";
 
+    const applyBaseLayer = useCallback((value: BaseLayerState) => {
+        setBaseLayer(value);
+        if (baseStorageKey) localStorage.setItem(baseStorageKey, JSON.stringify(value));
+    }, [baseStorageKey]);
+
+    const updateBaseLayer = (changes: Partial<BaseLayerState>, label: string) => {
+        if (!editMode) { setNotice("Włącz Tryb edycji"); return; }
+        if (baseLayer.isLocked && changes.isLocked !== false) { setNotice("Element jest zablokowany"); return; }
+        const before = { ...baseLayer };
+        const after = { ...baseLayer, ...changes };
+        applyBaseLayer(after);
+        history.record({ label, undo: () => Promise.resolve(applyBaseLayer(before)), redo: () => Promise.resolve(applyBaseLayer(after)) });
+    };
+
+    useEffect(() => {
+        if (!baseStorageKey) return;
+        const stored = localStorage.getItem(baseStorageKey);
+        const frame = requestAnimationFrame(() => {
+            try { setBaseLayer(stored ? { ...defaultBaseLayer, ...JSON.parse(stored) as BaseLayerState } : defaultBaseLayer); }
+            catch { setBaseLayer(defaultBaseLayer); }
+            setSelectedLayerId(null);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [baseStorageKey]);
     const resetView = useCallback(() => {
+        clearTransientMapState();
         const scale = Math.min(viewportSize.width / imageSize.width, viewportSize.height / imageSize.height);
         setZoom(1);
         setOffset({ x: (viewportSize.width - imageSize.width * scale) / 2, y: (viewportSize.height - imageSize.height * scale) / 2 });
-    }, [imageSize, viewportSize]);
+    }, [clearTransientMapState, imageSize, viewportSize]);
 
     const loadMapsAndCategories = useCallback(async () => {
         try {
@@ -183,14 +236,14 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
             setSelectedMarker(null);
-            setContextMenu(null);
+            clearTransientMapState();
             setImageSize({ width: 1200, height: 800 });
             setEditMode(false);
             setDrawTool("pan");
             clearHistory();
         });
         return () => cancelAnimationFrame(frame);
-    }, [activeMapId, clearHistory]);
+    }, [activeMapId, clearHistory, clearTransientMapState]);
     useEffect(() => {
         const element = viewportRef.current;
         if (!element) return;
@@ -204,6 +257,10 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         const frame = requestAnimationFrame(resetView);
         return () => cancelAnimationFrame(frame);
     }, [resetView]);
+    useEffect(() => {
+        const frame = requestAnimationFrame(clearTransientMapState);
+        return () => cancelAnimationFrame(frame);
+    }, [clearTransientMapState, drawTool]);
     useEffect(() => {
         const changed = () => {
             const active = document.fullscreenElement === moduleRef.current;
@@ -240,7 +297,7 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
             } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
                 event.preventDefault(); void history.redo();
             } else if (event.key === "Escape") {
-                setSelectedAnnotationId(null); setSelectedLayerId(null);
+                clearTransientMapState();
             }
         };
         window.addEventListener("keydown", shortcut);
@@ -264,9 +321,12 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     };
 
     const pointOnCanvas = (clientX: number, clientY: number): MapStrokePoint | null => {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (!rect || actualScale === 0) return null;
-        return { x: (clientX - rect.left) / actualScale, y: (clientY - rect.top) / actualScale };
+        const rect = viewportRef.current?.getBoundingClientRect();
+        if (!rect || actualScale <= 0) return null;
+        return screenToMapWorld(clientX, clientY, {
+            viewportLeft: rect.left, viewportTop: rect.top,
+            offsetX: offset.x, offsetY: offset.y, scale: actualScale,
+        });
     };
 
     const saveMap = async (value: SaveWorldMap) => {
@@ -295,6 +355,7 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     };
     const changeActiveMap = (mapId: string) => {
         if (pendingSavesRef.current.size && !window.confirm("Nie wszystkie zmiany zostały zapisane. Opuścić bieżącą mapę?")) return;
+        clearTransientMapState();
         setActiveMapId(mapId);
     };
 
@@ -398,13 +459,6 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         }
     };
 
-    const configureGrid = async (isVisible: boolean, size: number, changes: Record<string, string | number | boolean> = {}) => {
-        if (!activeMap) return;
-        setSaveState("saving");
-        const response = await api.patch<WorldMapModel>(`/worlds/${worldId}/maps/${activeMap.id}/grid`, { isVisible, size, ...changes });
-        setMaps((current) => current.map((item) => item.id === response.data.id ? response.data : item));
-        setSaveState(pendingSavesRef.current.size ? "failed" : "saved");
-    };
     const configureDrawingLayer = async (changes: Partial<Pick<WorldMapModel,"isDrawingLayerVisible"|"isDrawingLayerLocked"|"isDrawingLayerVisibleToPlayers">>, recordHistory = true) => {
         if (!activeMap) return;
         const response = await api.patch<WorldMapModel>(`/worlds/${worldId}/maps/${activeMap.id}/drawing-layer`, {
@@ -419,8 +473,6 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
             history.record({label:"Ustawienia warstwy rysunków",undo:()=>apply(before),redo:()=>apply(after)});
         }
     };
-    const undoStroke = history.undo;
-
     const drawingPayload = (stroke: MapDrawingStroke) => ({
         color: stroke.color, width: stroke.width, isEraser: stroke.isEraser,
         points: stroke.points, isVisibleToPlayers: stroke.isVisibleToPlayers,
@@ -430,14 +482,14 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         rotation: stroke.rotation, sortOrder: stroke.sortOrder,
         isVisible: stroke.isVisible, isLocked: stroke.isLocked,
     });
-    const addTextAt = async (point: MapStrokePoint) => {
-        const localId = `local-${crypto.randomUUID()}`;
+    const addTextAt = async (point: MapStrokePoint, style: MapTextStyle) => {
+        const localId = createLocalDrawingId();
         const optimistic: MapDrawingStroke = {
             id: localId, worldId, mapId: activeMapId, createdAt: new Date().toISOString(),
-            color: drawColor, width: drawWidth, isEraser: false, points: [point, point],
-            isVisibleToPlayers: drawVisibleToPlayers, tool: "text", fillColor: drawFill,
-            opacity: drawOpacity, dashStyle: drawDash, text: drawText,
-            fontSize: drawFontSize, hasTextBorder: drawTextBorder, rotation: 0,
+            color: style.color, width: drawWidth, isEraser: false, points: [point, point],
+            isVisibleToPlayers: drawVisibleToPlayers, tool: "text", fillColor: style.fillColor,
+            opacity: drawOpacity, dashStyle: drawDash, text: style.text,
+            fontSize: style.fontSize, hasTextBorder: style.hasBorder, rotation: 0,
             sortOrder: drawingStrokes.length * 10, isVisible: true, isLocked: false,
         };
         setDrawingStrokes((items)=>[...items,optimistic]); setSaveState("saving");
@@ -452,7 +504,8 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
             setSaveState(pendingSavesRef.current.size ? "failed" : "saved");
         };
         try { await finish(); }
-        catch { pendingSavesRef.current.set(`drawing:${localId}`,finish);setSaveState("failed");setError("Tekst pozostał lokalnie, ale nie został zapisany."); }
+        catch (error) { pendingSavesRef.current.set(`drawing:${localId}`,finish);setSaveState("failed");setError(saveErrorMessage(error,"Tekst pozostał lokalnie, ale nie został zapisany")); }
+        if (!createMany) setDrawTool("select");
     };
     const applyDrawing = async (stroke: MapDrawingStroke) => {
         setDrawingStrokes((current) => current.map((item) => item.id === stroke.id ? stroke : item));
@@ -566,7 +619,8 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     };
 
     const zoomAt = (nextZoom: number, clientX?: number, clientY?: number) => {
-        const bounded = clamp(nextZoom, 0.25, 8);
+        clearTransientMapState();
+        const bounded = clamp(nextZoom, 0.05, 8);
         const viewportRect = viewportRef.current?.getBoundingClientRect();
         const px = clientX !== undefined && viewportRect ? clientX - viewportRect.left : viewportSize.width / 2;
         const py = clientY !== undefined && viewportRect ? clientY - viewportRect.top : viewportSize.height / 2;
@@ -589,6 +643,7 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     const onViewportPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
         if ((event.target as HTMLElement).closest(".mapgenie-marker, .map-context-menu, .map-image-layer, .map-annotation")) return;
         if (editMode && drawTool !== "pan" && drawTool !== "select") {
+            if (!startsPrimaryDrawingGesture(event)) return;
             const point = pointOnCanvas(event.clientX, event.clientY);
             if (activeMap?.isDrawingLayerLocked) { setNotice("Element jest zablokowany"); return; }
             if (point && drawTool === "eraser") {
@@ -596,11 +651,17 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
                 if (target) void deleteAnnotation(target); else setNotice("Gumka nie trafiła w adnotację aktywnej warstwy");
                 return;
             }
-            if (point) { setCurrentStroke([point, point]); event.currentTarget.setPointerCapture(event.pointerId); }
+            if (point && drawTool === "text") { setTextPosition(point); return; }
+            if (point) {
+                drawingPointerRef.current = event.pointerId;
+                setCurrentStroke([point, point]);
+                event.currentTarget.setPointerCapture(event.pointerId);
+            }
             return;
         }
         const point = pointOnMap(event.clientX, event.clientY);
         if (addMode && point) { setNewPosition(point); setMarkerDialog(null); setAddMode(false); return; }
+        clearTransientMapState();
         pointerRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
         event.currentTarget.setPointerCapture(event.pointerId);
         if (pointerRef.current.size === 1) panRef.current = { x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y };
@@ -610,9 +671,12 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         setContextMenu(null);
     };
     const onViewportPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (currentStroke) {
+        if (currentStroke && drawingPointerRef.current === event.pointerId) {
+            if (!continuesPrimaryDrawingGesture(event)) {
+                setCurrentStroke(null); drawingPointerRef.current = null; return;
+            }
             const point = pointOnCanvas(event.clientX, event.clientY);
-            if (point) setCurrentStroke((current) => current ? (drawTool === "pen" || drawTool === "polygon" ? [...current, point] : [current[0], point]) : null);
+            if (point) setCurrentStroke((current) => current ? (drawTool === "pen" ? [...current, point] : [current[0], point]) : null);
             return;
         }
         if (!pointerRef.current.has(event.pointerId)) return;
@@ -626,12 +690,18 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         }
     };
     const endPointer = async (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (currentStroke && currentStroke.length > 1) {
-            const localId = `local-${crypto.randomUUID()}`;
+        const completedStroke = currentStroke;
+        const completedTool = drawTool;
+        const shouldSave = completedStroke && drawingPointerRef.current === event.pointerId && hasMeaningfulDrawingDrag(completedStroke, 2 / actualScale);
+        setCurrentStroke(null);
+        drawingPointerRef.current = null;
+        pointerRef.current.delete(event.pointerId); panRef.current = null; pinchRef.current = null;
+        if (shouldSave) {
+            const localId = createLocalDrawingId();
             const payload = {
                 color: drawColor, width: drawWidth, isEraser: false,
-                points: currentStroke, isVisibleToPlayers: drawVisibleToPlayers,
-                tool: drawTool as MapDrawingStroke["tool"], fillColor: drawFill, opacity: drawOpacity,
+                points: completedStroke, isVisibleToPlayers: drawVisibleToPlayers,
+                tool: completedTool as MapDrawingStroke["tool"], fillColor: drawFill, opacity: drawOpacity,
                 dashStyle: drawDash, text: drawText, fontSize: drawFontSize,
                 hasTextBorder: drawTextBorder, rotation: 0,
                 sortOrder: drawingStrokes.length * 10, isVisible: true, isLocked: false,
@@ -649,18 +719,17 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
                 pendingSavesRef.current.delete(`drawing:${localId}`);
                 const remove = async () => { await api.delete(`/worlds/${worldId}/maps/${activeMapId}/drawings/${created.id}`); setDrawingStrokes((items) => items.filter((item) => item.id !== created.id)); };
                 const restore = async () => { const restored = (await api.post<MapDrawingStroke>(`/worlds/${worldId}/maps/${activeMapId}/drawings`, { ...drawingPayload(created), id: created.id })).data; setDrawingStrokes((items) => [...items, restored].sort((a,b) => a.sortOrder-b.sortOrder)); };
-                history.record({ label: `Dodanie: ${drawTool}`, undo: remove, redo: restore });
+                history.record({ label: `Dodanie: ${completedTool}`, undo: remove, redo: restore });
                 setSaveState(pendingSavesRef.current.size ? "failed" : "saved");
             };
             try {
                 await finishSave();
-            } catch {
+            } catch (error) {
                 pendingSavesRef.current.set(`drawing:${localId}`, finishSave);
-                setSaveState("failed"); setError("Nie udało się zapisać rysunku. Pozostał widoczny lokalnie; użyj „Ponów zapis”.");
+                setSaveState("failed"); setError(saveErrorMessage(error,"Nie udało się zapisać rysunku. Pozostał widoczny lokalnie; użyj „Ponów zapis”"));
             }
+            if ((completedTool === "line" || completedTool === "arrow") && !createMany) setDrawTool("select");
         }
-        setCurrentStroke(null);
-        pointerRef.current.delete(event.pointerId); panRef.current = null; pinchRef.current = null;
     };
 
     const moveMarker = (event: ReactPointerEvent<HTMLButtonElement>, marker: MapMarker) => {
@@ -670,14 +739,12 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
     };
     const dragMarker = (event: ReactPointerEvent<HTMLButtonElement>, marker: MapMarker) => {
         if (dragMarkerRef.current !== marker.id) return;
-        let point = pointOnMap(event.clientX, event.clientY); if (!point) return;
-        if (activeMap?.isSnapToGridEnabled) point = { x: clamp(Math.round(point.x * imageSize.width / activeMap.gridSize) * activeMap.gridSize / imageSize.width,0,1), y: clamp(Math.round(point.y * imageSize.height / activeMap.gridSize) * activeMap.gridSize / imageSize.height,0,1) };
+        const point = pointOnMap(event.clientX, event.clientY); if (!point) return;
         setMarkers((current) => current.map((item) => item.id === marker.id ? { ...item, positionX: point.x, positionY: point.y } : item));
     };
     const finishMarkerDrag = async (event: ReactPointerEvent<HTMLButtonElement>, marker: MapMarker) => {
         if (dragMarkerRef.current !== marker.id) return;
-        const before = markerDragStartRef.current; dragMarkerRef.current = null; markerDragStartRef.current = null; let point = pointOnMap(event.clientX, event.clientY); if (!point) return;
-        if (activeMap?.isSnapToGridEnabled) point = { x: clamp(Math.round(point.x * imageSize.width / activeMap.gridSize) * activeMap.gridSize / imageSize.width,0,1), y: clamp(Math.round(point.y * imageSize.height / activeMap.gridSize) * activeMap.gridSize / imageSize.height,0,1) };
+        const before = markerDragStartRef.current; dragMarkerRef.current = null; markerDragStartRef.current = null; const point = pointOnMap(event.clientX, event.clientY); if (!point) return;
         try { const response = await api.patch<MapMarker>(`/worlds/${worldId}/maps/${activeMapId}/markers/${marker.id}/position`, { positionX: point.x, positionY: point.y }); setMarkers((current) => current.map((item) => item.id === marker.id ? response.data : item)); setSelectedMarker(response.data); if(before){const after=response.data;const apply=async(value:MapMarker)=>{const saved=(await api.patch<MapMarker>(`/worlds/${worldId}/maps/${activeMapId}/markers/${marker.id}/position`,{positionX:value.positionX,positionY:value.positionY})).data;setMarkers(items=>items.map(item=>item.id===saved.id?saved:item));};history.record({label:"Przesunięcie markera",undo:()=>apply(before),redo:()=>apply(after)});} }
         catch { setError("Nie udało się zapisać nowej pozycji markera."); void loadMarkers(); }
     };
@@ -741,7 +808,7 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         if (action === "center") { setOffset({ x: viewportSize.width/2-menu.cx*actualScale, y: viewportSize.height/2-menu.cy*actualScale }); return; }
         if (action === "add-marker") { setNewPosition({x:menu.nx,y:menu.ny}); setMarkerDialog(null); return; }
         if (action === "add-image") { setLayerInsertPosition({x:menu.cx,y:menu.cy}); setLayerDialog(null); return; }
-        if (action === "add-text") { await addTextAt({x:menu.cx,y:menu.cy}); setDrawTool("select"); return; }
+        if (action === "add-text") { setTextPosition({x:menu.cx,y:menu.cy}); return; }
         if (action === "start-drawing") { setDrawTool("pen"); return; }
         if (marker) {
             if (action === "open") setSelectedMarker(marker);
@@ -778,6 +845,57 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         }
     };
 
+    const startBaseDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+        event.stopPropagation();
+        if (!editMode) return;
+        setSelectedLayerId("base");
+        if (baseLayer.isLocked) { setNotice("Element jest zablokowany"); return; }
+        baseDragRef.current = { startX: event.clientX, startY: event.clientY, before: { ...baseLayer } };
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+    const dragBase = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = baseDragRef.current; if (!drag) return;
+        const x = drag.before.positionX + (event.clientX - drag.startX) / actualScale;
+        const y = drag.before.positionY + (event.clientY - drag.startY) / actualScale;
+        setBaseLayer((current) => ({ ...current, positionX: x, positionY: y }));
+    };
+    const finishBaseDrag = () => {
+        const drag = baseDragRef.current; if (!drag) return;
+        baseDragRef.current = null;
+        const after = { ...baseLayer };
+        applyBaseLayer(after);
+        history.record({ label: "Przesunięcie obrazu bazowego", undo: () => Promise.resolve(applyBaseLayer(drag.before)), redo: () => Promise.resolve(applyBaseLayer(after)) });
+    };
+
+    const startRotation = (event: ReactPointerEvent<HTMLButtonElement>, id: string, rotation: number) => {
+        event.preventDefault(); event.stopPropagation();
+        const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+        if (!bounds) return;
+        const centerX = bounds.left + bounds.width / 2; const centerY = bounds.top + bounds.height / 2;
+        rotationRef.current = { id, beforeRotation: rotation, centerX, centerY, pointerAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI };
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+    const rotateImage = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        const rotation = rotationRef.current; if (!rotation) return;
+        const angle = Math.atan2(event.clientY - rotation.centerY, event.clientX - rotation.centerX) * 180 / Math.PI;
+        let next = rotation.beforeRotation + angle - rotation.pointerAngle;
+        if (event.shiftKey) next = Math.round(next / 15) * 15;
+        if (rotation.id === "base") setBaseLayer((current) => ({ ...current, rotation: next }));
+        else setImageLayers((items) => items.map((item) => item.id === rotation.id ? { ...item, rotation: next } : item));
+    };
+    const finishRotation = async () => {
+        const rotation = rotationRef.current; if (!rotation) return;
+        rotationRef.current = null;
+        if (rotation.id === "base") {
+            const before = { ...baseLayer, rotation: rotation.beforeRotation }; const after = { ...baseLayer };
+            applyBaseLayer(after);
+            history.record({ label: "Obrót obrazu bazowego", undo: () => Promise.resolve(applyBaseLayer(before)), redo: () => Promise.resolve(applyBaseLayer(after)) });
+            return;
+        }
+        const current = imageLayers.find((item) => item.id === rotation.id);
+        if (current) await updateLayer({ ...current, rotation: rotation.beforeRotation }, { rotation: current.rotation });
+    };
+
     const startLayerDrag = (event: ReactPointerEvent<HTMLDivElement>, layer: MapImageLayer) => {
         event.stopPropagation();
         if (!editMode) return;
@@ -790,8 +908,8 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         const drag = dragLayerRef.current; if (!drag || drag.id !== layer.id) return;
         const rawX = drag.x + (event.clientX - drag.startX) / actualScale;
         const rawY = drag.y + (event.clientY - drag.startY) / actualScale;
-        const x = activeMap?.isSnapToGridEnabled ? Math.round(rawX / activeMap.gridSize) * activeMap.gridSize : rawX;
-        const y = activeMap?.isSnapToGridEnabled ? Math.round(rawY / activeMap.gridSize) * activeMap.gridSize : rawY;
+        const x = rawX;
+        const y = rawY;
         setImageLayers((current) => current.map((item) => item.id === layer.id ? { ...item, positionX: x, positionY: y } : item));
     };
     const finishLayerDrag = async (_event: ReactPointerEvent<HTMLDivElement>, layer: MapImageLayer) => {
@@ -834,10 +952,10 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
 
     if (isLoading && maps.length === 0) return <section className="content-surface mapgenie-empty"><p>Wczytywanie atlasu świata...</p></section>;
 
-    return <section ref={moduleRef} className={`content-surface world-map-module ${workspaceFullscreen ? "is-workspace-fullscreen" : ""}`}>
+    return <section ref={moduleRef} data-testid="map-module" className={`content-surface world-map-module ${workspaceFullscreen ? "is-workspace-fullscreen" : ""}`}>
         <header className="module-header mapgenie-header"><div><span className="content-eyebrow">Mini-MapGenie · {worldName}</span><h1>{activeMap?.name ?? "Atlas map"}</h1>{activeMap?.description && <p>{activeMap.description}</p>}</div><div className="map-controls">
-            <label className="player-view-toggle"><input type="checkbox" checked={playerView} onChange={(event) => { setPlayerView(event.target.checked); setMarkerStatus(0); setEditMode(false); setDrawTool("pan"); setAddMode(false); }} /> Widok gracza</label>
-            {!playerView && <label className={`edit-mode-toggle ${editMode ? "is-active" : ""}`}><input type="checkbox" checked={editMode} onChange={(event) => { setEditMode(event.target.checked); if (!event.target.checked) { setDrawTool("pan"); setAddMode(false); } }} /> Tryb edycji</label>}
+            {!forcePlayerView && <label className="player-view-toggle"><input type="checkbox" checked={playerView} onChange={(event) => { setManualPlayerView(event.target.checked); setMarkerStatus(0); setEditMode(false); setDrawTool("pan"); setAddMode(false); }} /> Widok gracza</label>}
+            {!playerView && <label data-testid="map-edit-mode" className={`edit-mode-toggle ${editMode ? "is-active" : ""}`}><input type="checkbox" checked={editMode} onChange={(event) => { setEditMode(event.target.checked); if (!event.target.checked) { setDrawTool("pan"); setAddMode(false); } }} /> Tryb edycji</label>}
             {!playerView && <label className="player-view-toggle"><input type="checkbox" checked={protectLocked} onChange={(event) => setProtectLocked(event.target.checked)} /> Chroń zablokowane</label>}
             <span className={`map-save-state is-${saveState}`}>{saveState === "saving" ? "Zapisywanie…" : saveState === "failed" ? "Nie zapisano" : "Zapisano"}</span>
         </div></header>
@@ -848,11 +966,12 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
                 <div className="panel-title"><div><span>Warstwy mapy</span><strong>{imageLayers.length + 2} warstw · {filteredMarkers.length} markerów{selectedLayerId ? " · obraz zaznaczony" : ""}</strong></div></div>
                 {!playerView && editMode && <button type="button" className="add-library-image" onClick={() => { setLayerInsertPosition(null); setLayerDialog(null); }}>＋ Dodaj obraz z Biblioteki</button>}
                 {!playerView && <div className="composition-layers">
-                    <div className="composition-layer is-base"><span>▧</span><div><strong>Obraz bazowy</strong><small>Chroniony oryginał</small></div><span>🔒</span></div>
+                    <div className={`composition-layer is-base ${baseLayer.isVisible ? "" : "is-hidden"}`}><button type="button" disabled={!editMode} onClick={() => updateBaseLayer({ isVisible: !baseLayer.isVisible }, "Widoczność obrazu bazowego")}>{baseLayer.isVisible ? "◉" : "○"}</button><div><strong>Obraz bazowy</strong><small>{Math.round(baseLayer.scale * 100)}% · {Math.round(baseLayer.rotation)}° · ustawienia lokalne</small></div><button type="button" disabled={!editMode} title={baseLayer.isLocked ? "Świadomie odblokuj obraz bazowy" : "Zablokuj obraz bazowy"} onClick={() => updateBaseLayer({ isLocked: !baseLayer.isLocked }, "Blokada obrazu bazowego")}>{baseLayer.isLocked ? "🔒" : "🔓"}</button></div>
                     {imageLayers.map((layer) => <div key={layer.id} className={`composition-layer ${layer.isVisible ? "" : "is-hidden"}`}><button type="button" onClick={() => void updateLayer(layer, { isVisible: !layer.isVisible })}>{layer.isVisible ? "◉" : "○"}</button><div><strong>{layer.name}</strong><small>{Math.round(layer.scale * 100)}% · {layer.rotation}°</small></div><button type="button" title={layer.isLocked ? "Odblokuj" : "Zablokuj"} onClick={() => void updateLayer(layer, { isLocked: !layer.isLocked })}>{layer.isLocked ? "🔒" : "🔓"}</button>{editMode && <button type="button" onClick={() => setLayerDialog(layer)}>✎</button>}{editMode && <button type="button" className="danger-action" onClick={() => layer.isLocked ? setNotice("Element jest zablokowany") : setLayerToDelete(layer)}>×</button>}</div>)}
-                    <div className="grid-controls"><strong>Siatka i płótno</strong><label><input type="checkbox" checked={activeMap.isGridVisible} disabled={!editMode} onChange={(event) => void configureGrid(event.target.checked, activeMap.gridSize)} /> Siatka pomocnicza</label><label>Tło <select disabled={!editMode} value={activeMap.canvasBackground ?? "ocean"} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { canvasBackground: event.target.value })}><option value="ocean">Ocean</option><option value="parchment">Pergamin</option><option value="dark">Ciemne</option><option value="solid">Jednolity</option></select></label><label>Styl <select disabled={!editMode} value={activeMap.gridStyle ?? "lines"} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { style: event.target.value })}><option value="lines">Linie</option><option value="dots">Kropki</option><option value="hex">Heksy</option></select></label><label>Rozmiar pola <input type="number" min="8" max="512" value={activeMap.gridSize} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, Number(event.target.value))} /></label><label>Kolor <input type="color" value={activeMap.gridColor ?? "#9ed8e5"} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { color: event.target.value })} /></label><label>Krycie <input type="range" min="0.05" max="1" step="0.05" value={activeMap.gridOpacity ?? .55} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { opacity: Number(event.target.value) })} /></label><label>Grubość <input type="range" min="0.5" max="8" step="0.5" value={activeMap.gridLineWidth ?? 1.5} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { lineWidth: Number(event.target.value) })} /></label><label><input type="checkbox" checked={activeMap.isGridMajorVisible ?? true} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { isMajorVisible: event.target.checked })} /> Linie główne</label><label>Co pól <input type="number" min="2" max="20" value={activeMap.gridMajorEvery ?? 5} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { majorEvery: Number(event.target.value) })} /></label><label><input type="checkbox" checked={activeMap.isSnapToGridEnabled ?? false} disabled={!editMode} onChange={(event) => void configureGrid(activeMap.isGridVisible, activeMap.gridSize, { isSnapEnabled: event.target.checked })} /> Przyciągaj</label></div>
-                    {editMode && <div className="drawing-tools"><strong>Adnotacje</strong><div className="drawing-tool-grid">{([['pan','Rączka'],['select','Zaznacz'],['pen','Pióro'],['eraser','Gumka'],['line','Linia'],['arrow','Strzałka'],['rectangle','Prostokąt'],['ellipse','Elipsa'],['polygon','Wielokąt'],['text','Tekst']] as [DrawTool,string][]).map(([tool,label]) => <button key={tool} type="button" className={drawTool === tool ? "is-active" : ""} onClick={() => setDrawTool(tool)}>{label}</button>)}</div><label>Obrys <input type="color" value={drawColor} onChange={(event) => setDrawColor(event.target.value)} /></label><label>Wypełnienie <select value={drawFill} onChange={(event) => setDrawFill(event.target.value)}><option value="transparent">Brak</option><option value="#f1d28a">Złote</option><option value="#702a30">Bordowe</option><option value="#173f4c">Morskie</option></select></label><label>Grubość <input type="range" min="1" max="40" value={drawWidth} onChange={(event) => setDrawWidth(Number(event.target.value))} /> {drawWidth}px</label><label>Krycie <input type="range" min="0.1" max="1" step="0.1" value={drawOpacity} onChange={(event) => setDrawOpacity(Number(event.target.value))} /> {Math.round(drawOpacity * 100)}%</label><label>Linia <select value={drawDash} onChange={(event) => setDrawDash(event.target.value as typeof drawDash)}><option value="solid">Ciągła</option><option value="dashed">Kreskowana</option><option value="dotted">Kropkowana</option></select></label>{drawTool === "text" && <><label>Tekst <input value={drawText} maxLength={500} onChange={(event) => setDrawText(event.target.value)} /></label><label>Rozmiar <input type="number" min="8" max="160" value={drawFontSize} onChange={(event) => setDrawFontSize(Number(event.target.value))} /></label></>}<label><input type="checkbox" checked={drawVisibleToPlayers} onChange={(event) => setDrawVisibleToPlayers(event.target.checked)} /> Widoczne dla graczy</label><div><button type="button" disabled={drawingStrokes.length === 0} onClick={() => void undoStroke()}>Cofnij</button><button type="button" disabled title="Ponawianie będzie aktywne po migracji pełnego edytora">Ponów</button><button type="button" disabled={drawingStrokes.length === 0} onClick={() => setClearDrawingsConfirm(true)}>Wyczyść</button></div></div>}
+                    {editMode && <div className="drawing-tools"><strong>Adnotacje</strong><div className="drawing-tool-grid">{([['pan','Rączka'],['select','Zaznacz'],['pen','Pióro'],['eraser','Gumka'],['line','Linia'],['arrow','Strzałka'],['text','Tekst']] as [DrawTool,string][]).map(([tool,label]) => <button key={tool} data-testid={`map-tool-${tool}`} type="button" className={drawTool === tool ? "is-active" : ""} onClick={() => setDrawTool(tool)}>{label}</button>)}</div><label>Obrys <input type="color" value={drawColor} onChange={(event) => setDrawColor(event.target.value)} /></label><label>Wypełnienie <select value={drawFill} onChange={(event) => setDrawFill(event.target.value)}><option value="transparent">Brak</option><option value="#f1d28a">Złote</option><option value="#702a30">Bordowe</option><option value="#173f4c">Morskie</option></select></label><label>Grubość <input type="range" min="1" max="40" value={drawWidth} onChange={(event) => setDrawWidth(Number(event.target.value))} /> {drawWidth}px</label><label>Krycie <input type="range" min="0.1" max="1" step="0.1" value={drawOpacity} onChange={(event) => setDrawOpacity(Number(event.target.value))} /> {Math.round(drawOpacity * 100)}%</label><label>Linia <select value={drawDash} onChange={(event) => setDrawDash(event.target.value as typeof drawDash)}><option value="solid">Ciągła</option><option value="dashed">Kreskowana</option><option value="dotted">Kropkowana</option></select></label><label><input type="checkbox" checked={createMany} onChange={(event) => setCreateMany(event.target.checked)} /> Twórz wiele</label><label><input type="checkbox" checked={drawVisibleToPlayers} onChange={(event) => setDrawVisibleToPlayers(event.target.checked)} /> Widoczne dla graczy</label></div>}
                 </div>}
+                {!playerView && editMode && selectedLayerId === "base" && <div className="image-transform-controls"><strong>Obraz bazowy {baseLayer.isLocked ? "· 🔒" : "· odblokowany"}</strong><p>Domyślnie chroniony. Odblokowanie pozwala świadomie zmienić kompozycję.</p><label>Kąt <input type="number" value={Math.round(baseLayer.rotation * 10) / 10} disabled={baseLayer.isLocked} onChange={(event) => updateBaseLayer({ rotation: Number(event.target.value) }, "Kąt obrazu bazowego")} />°</label><div><button type="button" disabled={baseLayer.isLocked} onClick={() => updateBaseLayer({ rotation: baseLayer.rotation - 90 }, "Obrót obrazu bazowego -90°")}>−90°</button><button type="button" disabled={baseLayer.isLocked} onClick={() => updateBaseLayer({ rotation: 0 }, "Reset obrotu obrazu bazowego")}>Reset</button><button type="button" disabled={baseLayer.isLocked} onClick={() => updateBaseLayer({ rotation: baseLayer.rotation + 90 }, "Obrót obrazu bazowego +90°")}>+90°</button></div><label>Skala <input type="range" min="0.05" max="8" step="0.05" value={baseLayer.scale} disabled={baseLayer.isLocked} onChange={(event) => updateBaseLayer({ scale: Number(event.target.value) }, "Skala obrazu bazowego")} /> {Math.round(baseLayer.scale * 100)}%</label><label>Krycie <input type="range" min="0.05" max="1" step="0.05" value={baseLayer.opacity} disabled={baseLayer.isLocked} onChange={(event) => updateBaseLayer({ opacity: Number(event.target.value) }, "Krycie obrazu bazowego")} /> {Math.round(baseLayer.opacity * 100)}%</label><button type="button" onClick={() => updateBaseLayer({ isLocked: !baseLayer.isLocked }, "Blokada obrazu bazowego")}>{baseLayer.isLocked ? "Świadomie odblokuj" : "Zablokuj"}</button>{baseLayer.isVisible ? <button type="button" className="danger-action" disabled={baseLayer.isLocked} onClick={() => setDeleteBaseConfirm(true)}>Usuń z kompozycji…</button> : <button type="button" onClick={() => updateBaseLayer({ isVisible: true }, "Przywrócenie obrazu bazowego")}>Przywróć obraz bazowy</button>}</div>}
+                {!playerView && editMode && selectedImageLayer && <div className="image-transform-controls"><strong>{selectedImageLayer.name} {selectedImageLayer.isLocked ? "· 🔒" : ""}</strong><label>Kąt <input type="number" value={Math.round(selectedImageLayer.rotation * 10) / 10} disabled={selectedImageLayer.isLocked} onChange={(event) => void updateLayer(selectedImageLayer, { rotation: Number(event.target.value) })} />°</label><div><button type="button" disabled={selectedImageLayer.isLocked} onClick={() => void updateLayer(selectedImageLayer, { rotation: selectedImageLayer.rotation - 90 })}>−90°</button><button type="button" disabled={selectedImageLayer.isLocked} onClick={() => void updateLayer(selectedImageLayer, { rotation: 0 })}>Reset</button><button type="button" disabled={selectedImageLayer.isLocked} onClick={() => void updateLayer(selectedImageLayer, { rotation: selectedImageLayer.rotation + 90 })}>+90°</button></div><label>Skala <input type="range" min="0.05" max="8" step="0.05" value={selectedImageLayer.scale} disabled={selectedImageLayer.isLocked} onChange={(event) => void updateLayer(selectedImageLayer, { scale: Number(event.target.value) })} /> {Math.round(selectedImageLayer.scale * 100)}%</label><label>Krycie <input type="range" min="0.05" max="1" step="0.05" value={selectedImageLayer.opacity ?? 1} disabled={selectedImageLayer.isLocked} onChange={(event) => void updateLayer(selectedImageLayer, { opacity: Number(event.target.value) })} /> {Math.round((selectedImageLayer.opacity ?? 1) * 100)}%</label><button type="button" onClick={() => void updateLayer(selectedImageLayer, { isLocked: !selectedImageLayer.isLocked })}>{selectedImageLayer.isLocked ? "Odblokuj" : "Zablokuj"}</button><button type="button" className="danger-action" disabled={selectedImageLayer.isLocked} onClick={() => setLayerToDelete(selectedImageLayer)}>Usuń z kompozycji…</button></div>}
                 {!playerView && editMode && <div className="editor-session-panel"><div className="history-controls"><button type="button" disabled={!history.undoCount || history.busy} title={history.undoLabel} onClick={() => void history.undo()}>↶ Cofnij ({history.undoCount})</button><button type="button" disabled={!history.redoCount || history.busy} title={history.redoLabel} onClick={() => void history.redo()}>↷ Ponów ({history.redoCount})</button></div><label><input type="checkbox" checked={activeMap.isDrawingLayerVisible} onChange={(event)=>void configureDrawingLayer({isDrawingLayerVisible:event.target.checked})} /> Warstwa rysunków widoczna</label><label><input type="checkbox" checked={activeMap.isDrawingLayerLocked} onChange={(event)=>void configureDrawingLayer({isDrawingLayerLocked:event.target.checked})} /> 🔒 Zablokuj całą warstwę</label><label><input type="checkbox" checked={activeMap.isDrawingLayerVisibleToPlayers} onChange={(event)=>void configureDrawingLayer({isDrawingLayerVisibleToPlayers:event.target.checked})} /> Widoczna dla graczy</label>{selectedAnnotation && <div className="annotation-inspector"><strong>Zaznaczona adnotacja</strong><label>Obrys <input type="color" value={selectedAnnotation.color} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,color:event.target.value},"Kolor adnotacji")} /></label><label>Wypełnienie/tło <input type="color" value={selectedAnnotation.fillColor === "transparent" ? "#ffffff" : selectedAnnotation.fillColor} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,fillColor:event.target.value},"Wypełnienie adnotacji")} /></label><label>Grubość <input type="range" min="1" max="40" value={selectedAnnotation.width} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,width:Number(event.target.value)},"Grubość adnotacji")} /></label><label>Krycie <input type="range" min="0.1" max="1" step="0.1" value={selectedAnnotation.opacity} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,opacity:Number(event.target.value)},"Krycie adnotacji")} /></label><label>Styl <select value={selectedAnnotation.dashStyle} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,dashStyle:event.target.value as MapDrawingStroke["dashStyle"]},"Styl kreski")}><option value="solid">Ciągła</option><option value="dashed">Kreskowana</option><option value="dotted">Kropkowana</option></select></label>{selectedAnnotation.tool === "text" && <><label>Tekst <textarea value={selectedAnnotation.text} disabled={selectedAnnotation.isLocked} onChange={(event)=>setDrawingStrokes((items)=>items.map((item)=>item.id===selectedAnnotation.id?{...selectedAnnotation,text:event.target.value}:item))} onBlur={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,text:event.target.value},"Edycja tekstu")} /></label><label>Rozmiar <input type="number" min="8" max="240" value={selectedAnnotation.fontSize} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,fontSize:Number(event.target.value)},"Rozmiar tekstu")} /></label></>}<div><button type="button" onClick={()=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,isLocked:!selectedAnnotation.isLocked},"Blokada adnotacji")}>{selectedAnnotation.isLocked?"Odblokuj":"Zablokuj"}</button><button type="button" disabled={selectedAnnotation.isLocked} onClick={()=>void deleteAnnotation(selectedAnnotation)}>Usuń</button></div></div>}</div>}
                 {!playerView && editMode && drawTool === "text" && <div className="text-presentation-controls"><strong>Wygląd tekstu</strong><label><input type="checkbox" checked={drawFill !== "transparent"} onChange={(event) => setDrawFill(event.target.checked ? "#f1d28a" : "transparent")} /> Tło tekstu</label><label><input type="checkbox" checked={drawTextBorder} onChange={(event) => setDrawTextBorder(event.target.checked)} /> Ramka tekstu</label></div>}
                 {!playerView && editMode && selectedAnnotation?.tool === "text" && <div className="text-presentation-controls"><strong>Zaznaczony tekst</strong><label><input type="checkbox" checked={selectedAnnotation.fillColor !== "transparent"} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,fillColor:event.target.checked?"#f1d28a":"transparent"},"Tło tekstu")} /> Tło</label><label><input type="checkbox" checked={selectedAnnotation.hasTextBorder ?? true} disabled={selectedAnnotation.isLocked} onChange={(event)=>void commitDrawing(selectedAnnotation,{...selectedAnnotation,hasTextBorder:event.target.checked},"Ramka tekstu")} /> Ramka</label></div>}
@@ -867,20 +986,20 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
                 <div className="map-toolbar">
                     <select aria-label="Aktywna mapa" value={activeMapId} onChange={(event) => changeActiveMap(event.target.value)}>{maps.map((map) => <option key={map.id} value={map.id}>{map.name} · {mapTypeNames[map.type]}{!map.isPublished ? " · szkic" : ""}</option>)}</select>
                     {!playerView && editMode && <><button type="button" title="Tworzy niezależny projekt mapy" onClick={() => setMapDialog(null)}>＋ Nowa mapa</button><button type="button" onClick={() => setMapDialog(activeMap)}>Edytuj mapę</button><button type="button" className="toolbar-primary" onClick={() => setLayerDialog(null)}>＋ Dodaj obraz z Biblioteki</button></>}
-                    <span className="toolbar-separator" /><button type="button" onClick={() => zoomAt(zoom / 1.2)} aria-label="Oddal">−</button><span>{Math.round(zoom * 100)}%</span><button type="button" onClick={() => zoomAt(zoom * 1.2)} aria-label="Przybliż">＋</button><button type="button" onClick={resetView}>Dopasuj</button>
-                    <button type="button" onClick={() => void toggleFullscreen()}>{nativeFullscreen || workspaceFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran"}</button>
+                    <span className="toolbar-separator" /><button type="button" data-testid="map-zoom-out" onClick={() => zoomAt(zoom / 1.2)} aria-label="Oddal">−</button><span data-testid="map-zoom-value">{Math.round(zoom * 100)}%</span><button type="button" data-testid="map-zoom-in" onClick={() => zoomAt(zoom * 1.2)} aria-label="Przybliż">＋</button><button type="button" data-testid="map-fit-view" onClick={resetView}>Dopasuj</button>
+                    <button type="button" data-testid="map-fullscreen" onClick={() => void toggleFullscreen()}>{nativeFullscreen || workspaceFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran"}</button>
                     {saveState === "failed" && <button type="button" onClick={() => void retryUnsaved()}>Ponów zapis</button>}
                     {!playerView && editMode && markerStatus === 0 && <button type="button" className={addMode ? "is-active" : ""} onClick={() => setAddMode((value) => !value)}>{addMode ? "Kliknij miejsce…" : "＋ Marker"}</button>}
                 </div>
-                <div ref={viewportRef} className={`mapgenie-viewport canvas-${activeMap.canvasBackground ?? "ocean"} grid-${activeMap.gridStyle ?? "lines"} ${addMode ? "is-adding" : ""}`} onWheel={onWheel} onPointerDown={onViewportPointerDown} onPointerMove={onViewportPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer} onContextMenu={context}>
-                    <div ref={canvasRef} className="mapgenie-canvas" style={{ width: imageSize.width, height: imageSize.height, transform: `translate(${offset.x}px, ${offset.y}px) scale(${actualScale})` }}>
-                        <img src={`${apiBaseUrl}/worlds/${worldId}/maps/${activeMap.id}/images/${activeMap.imageFileId}?playerView=${playerView}`} alt={`Mapa: ${activeMap.name}`} draggable={false} onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth || 1200, height: event.currentTarget.naturalHeight || 800 })} />
-                        {activeMap.isGridVisible && <div className={`map-virtual-grid grid-${activeMap.gridStyle ?? "lines"} ${activeMap.isGridMajorVisible ?? true ? "with-major" : ""}`} style={{ left: -imageSize.width * 4, top: -imageSize.height * 4, width: imageSize.width * 9, height: imageSize.height * 9, color: activeMap.gridColor ?? "#9ed8e5", opacity: activeMap.gridOpacity ?? .55, "--grid-line": `${activeMap.gridLineWidth ?? 1.5}px`, backgroundSize: gridPatternSize } as CSSProperties} />}
-                        {imageLayers.filter((layer) => layer.isVisible).map((layer) => <div key={layer.id} className={`map-image-layer ${layer.isLocked ? "is-locked" : ""} ${selectedLayerId === layer.id ? "is-selected" : ""}`} style={{ left: layer.positionX, top: layer.positionY, zIndex: 10 + layer.sortOrder, opacity: layer.opacity ?? 1, transform: `rotate(${layer.rotation}deg) scale(${layer.scale})` }} onClick={(event) => { event.stopPropagation(); if (editMode) setSelectedLayerId(layer.id); }} onContextMenu={(event) => objectContext(event, "layer", layer.id)} onPointerDown={(event) => startLayerDrag(event, layer)} onPointerMove={(event) => dragLayer(event, layer)} onPointerUp={(event) => void finishLayerDrag(event, layer)}><img src={`${apiBaseUrl}/worlds/${worldId}/maps/${activeMap.id}/images/${layer.fileAttachmentId}?playerView=${playerView}`} alt={layer.name} draggable={false} />{editMode && <span>{layer.isLocked ? "🔒" : layer.name}</span>}</div>)}
-                        {activeMap.isDrawingLayerVisible && <MapAnnotationEditor strokes={drawingStrokes} width={imageSize.width} height={imageSize.height} scale={actualScale} editMode={editMode && !playerView} selectMode={drawTool === "select"} layerLocked={activeMap.isDrawingLayerLocked} protectLocked={protectLocked} snapToGrid={activeMap.isSnapToGridEnabled} gridSize={activeMap.gridSize} selectedId={selectedAnnotationId} onSelect={selectAnnotation} onCommit={(before,after,label) => void commitDrawing(before,after,label)} onContextMenu={(event,stroke) => objectContext(event,"annotation",stroke.id)} />}
-                        {currentStroke && drawTool !== "pan" && drawTool !== "select" && drawTool !== "eraser" && <svg className="map-drawing-preview" style={{ left: -imageSize.width * 4, top: -imageSize.height * 4, width: imageSize.width * 9, height: imageSize.height * 9 }} viewBox={`${-imageSize.width * 4} ${-imageSize.height * 4} ${imageSize.width * 9} ${imageSize.height * 9}`}><defs><marker id="map-arrow-head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="context-stroke" /></marker></defs>{renderShape(drawTool, currentStroke, drawColor, drawWidth, drawFill, drawOpacity, drawDash, drawText, drawFontSize, "current")}</svg>}
+                <div ref={viewportRef} data-testid="map-viewport" className={`mapgenie-viewport ${addMode ? "is-adding" : ""} ${drawingInputActive ? "is-drawing" : ""}`} onWheel={onWheel} onPointerDown={onViewportPointerDown} onPointerMove={onViewportPointerMove} onPointerUp={endPointer} onPointerCancel={endPointer} onContextMenu={context}>
+                    <div ref={canvasRef} data-testid="map-world-canvas" className="mapgenie-canvas" style={{ width: imageSize.width, height: imageSize.height, transform: `translate(${offset.x}px, ${offset.y}px) scale(${actualScale})` }}>
+                        <div data-testid="map-base-image" data-selected={selectedLayerId === "base"} className={`map-image-layer map-base-layer ${baseLayer.isLocked ? "is-locked" : ""} ${selectedLayerId === "base" ? "is-selected" : ""}`} style={{ left: baseLayer.positionX, top: baseLayer.positionY, zIndex: 2, opacity: baseLayer.opacity, transform: `rotate(${baseLayer.rotation}deg) scale(${baseLayer.scale})`, display: baseLayer.isVisible ? undefined : "none" }} onClick={(event) => { event.stopPropagation(); if (editMode) setSelectedLayerId("base"); }} onPointerDown={startBaseDrag} onPointerMove={dragBase} onPointerUp={finishBaseDrag}><img src={`${apiBaseUrl}/worlds/${worldId}/maps/${activeMap.id}/images/${activeMap.imageFileId}?playerView=${playerView}`} alt={`Mapa: ${activeMap.name}`} draggable={false} onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth || 1200, height: event.currentTarget.naturalHeight || 800 })} />{editMode && <span>{baseLayer.isLocked ? "🔒 Obraz bazowy" : "Obraz bazowy"}</span>}{editMode && selectedLayerId === "base" && !baseLayer.isLocked && <button type="button" className="image-rotation-handle" title="Przeciągnij, Shift przyciąga co 15°" onPointerDown={(event) => startRotation(event, "base", baseLayer.rotation)} onPointerMove={rotateImage} onPointerUp={() => void finishRotation()}>↻</button>}</div>
+                        {imageLayers.filter((layer) => layer.isVisible).map((layer) => <div key={layer.id} className={`map-image-layer ${layer.isLocked ? "is-locked" : ""} ${selectedLayerId === layer.id ? "is-selected" : ""}`} style={{ left: layer.positionX, top: layer.positionY, zIndex: 10 + layer.sortOrder, opacity: layer.opacity ?? 1, transform: `rotate(${layer.rotation}deg) scale(${layer.scale})` }} onClick={(event) => { event.stopPropagation(); if (editMode) setSelectedLayerId(layer.id); }} onContextMenu={(event) => objectContext(event, "layer", layer.id)} onPointerDown={(event) => startLayerDrag(event, layer)} onPointerMove={(event) => dragLayer(event, layer)} onPointerUp={(event) => void finishLayerDrag(event, layer)}><img src={`${apiBaseUrl}/worlds/${worldId}/maps/${activeMap.id}/images/${layer.fileAttachmentId}?playerView=${playerView}`} alt={layer.name} draggable={false} />{editMode && <span>{layer.isLocked ? "🔒" : layer.name}</span>}{editMode && selectedLayerId === layer.id && !layer.isLocked && <button type="button" className="image-rotation-handle" title="Przeciągnij, Shift przyciąga co 15°" onPointerDown={(event) => startRotation(event, layer.id, layer.rotation)} onPointerMove={rotateImage} onPointerUp={() => void finishRotation()}>↻</button>}</div>)}
+                        {activeMap.isDrawingLayerVisible && <MapAnnotationEditor strokes={drawingStrokes} scale={actualScale} editMode={editMode && !playerView} selectMode={drawTool === "select"} layerLocked={activeMap.isDrawingLayerLocked} protectLocked={protectLocked} selectedId={selectedAnnotationId} onSelect={selectAnnotation} onCommit={(before,after,label) => void commitDrawing(before,after,label)} onContextMenu={(event,stroke) => objectContext(event,"annotation",stroke.id)} />}
+                        {currentStroke && drawTool !== "pan" && drawTool !== "select" && drawTool !== "eraser" && <svg className="map-drawing-preview" style={{ left: -100000, top: -100000, width: 200000, height: 200000 }} viewBox="-100000 -100000 200000 200000"><defs><marker id="map-arrow-head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="context-stroke" /></marker></defs>{renderShape(drawTool, currentStroke, drawColor, drawWidth, drawFill, drawOpacity, drawDash, drawText, drawFontSize, "current")}</svg>}
                         {filteredMarkers.map((marker) => <div key={marker.id} className={`mapgenie-marker ${selectedMarker?.id === marker.id ? "is-selected" : ""} ${marker.isPublished ? "" : "is-hidden"}`} style={{ left: `${marker.positionX * 100}%`, top: `${marker.positionY * 100}%`, "--marker-inverse-scale": String(1 / actualScale) } as CSSProperties} onContextMenu={(event) => objectContext(event, "marker", marker.id)}><button type="button" style={{ color: marker.color }} title={`${marker.name} · ${marker.categoryName}`} onClick={(event) => { event.stopPropagation(); setSelectedMarker(marker); }} onPointerDown={(event) => moveMarker(event, marker)} onPointerMove={(event) => dragMarker(event, marker)} onPointerUp={(event) => void finishMarkerDrag(event, marker)}><span>{marker.icon}</span></button><small>{marker.name}</small></div>)}
                     </div>
+                    {drawingInputActive && <div data-testid="map-drawing-input" className="map-drawing-input-layer" aria-label="Obszar rysowania mapy" onPointerDown={(event) => { event.stopPropagation(); onViewportPointerDown(event); }} onPointerMove={(event) => { event.stopPropagation(); onViewportPointerMove(event); }} onPointerUp={(event) => { event.stopPropagation(); void endPointer(event); }} onPointerCancel={(event) => { event.stopPropagation(); void endPointer(event); }} />}
                 </div>
                 {contextMenu && <MapContextMenu x={contextMenu.x} y={contextMenu.y + 44} kind={contextMenu.kind} readOnly={playerView || !editMode} layer={imageLayers.find((item)=>item.id===contextMenu.id)} marker={markers.find((item)=>item.id===contextMenu.id)} annotation={drawingStrokes.find((item)=>item.id===contextMenu.id)} onAction={(action)=>void handleContextAction(action)} />}
                 <p className="map-help">Przeciągnij mapę · kółko lub gest szczypania zmienia skalę · prawy przycisk otwiera menu obiektu · markery MG można przeciągać</p>
@@ -906,6 +1025,8 @@ export default function WorldMap({ worldId, worldName, folders, pages, onOpenFol
         {layerDialog !== undefined && <LayerDialog worldId={worldId} layer={layerDialog} images={libraryImages} initialPosition={layerInsertPosition} nextOrder={(imageLayers.at(-1)?.sortOrder ?? 0) + 10} onSave={saveLayer} onClose={() => { setLayerDialog(undefined); setLayerInsertPosition(null); }} />}
         {confirmState && <ConfirmDialog title={confirmState.kind === "map" ? "Archiwizować mapę?" : confirmState.action === "delete" ? "Trwale usunąć marker?" : "Potwierdź zmianę stanu markera"} message={confirmState.kind === "map" ? "Mapa zniknie z widoku gracza, ale jej obraz i wszystkie markery pozostaną zachowane." : confirmState.action === "delete" ? "Ta operacja jest nieodwracalna i jest dostępna wyłącznie dla markera w Trash." : "Marker zmieni stan bez usuwania jego treści ani powiązań."} confirmation={confirmState.kind === "marker" && confirmState.action === "delete" ? "USUŃ" : undefined} busy={isActing} onConfirm={() => void runConfirmedAction()} onClose={() => setConfirmState(null)} />}
         {layerToDelete && <ConfirmDialog title="Usunąć warstwę z mapy?" message="Zniknie wyłącznie powiązanie i ustawienie warstwy. Oryginalny plik w Bibliotece pozostanie nietknięty." busy={isActing} onClose={() => setLayerToDelete(null)} onConfirm={() => void confirmDeleteLayer()} />}
+        {deleteBaseConfirm && <ConfirmDialog title="Usunąć obraz bazowy z kompozycji?" message="Obraz bazowy przestanie być widoczny na tym urządzeniu. Plik źródłowy i pozostałe warstwy pozostaną nietknięte; obraz można później przywrócić." confirmation="USUŃ OBRAZ BAZOWY" busy={false} onClose={() => setDeleteBaseConfirm(false)} onConfirm={() => { updateBaseLayer({ isVisible: false }, "Usunięcie obrazu bazowego z kompozycji"); setDeleteBaseConfirm(false); }} />}
+        {textPosition && <MapTextDialog initialText={drawText} fontSize={drawFontSize} color={drawColor} fillColor={drawFill} hasBorder={drawTextBorder} onSave={(style) => addTextAt(textPosition, style)} onClose={() => setTextPosition(null)} />}
         {clearDrawingsConfirm && <ConfirmDialog title="Wyczyścić warstwę rysunków?" message="Usunięte zostaną wyłącznie wektorowe adnotacje tej mapy. Obrazy i markery pozostaną bez zmian. Operacja jest blokowana, jeśli warstwa lub element jest zablokowany." confirmation="WYCZYŚĆ" busy={isActing} onClose={() => setClearDrawingsConfirm(false)} onConfirm={() => void confirmClearDrawings()} />}
     </section>;
 }

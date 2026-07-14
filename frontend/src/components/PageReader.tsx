@@ -13,6 +13,7 @@ interface Props {
     folder: Folder;
     folders: Folder[];
     page: Page;
+    canEdit: boolean;
     onBack: () => void;
     onUpdate: (title: string, content: string) => Promise<void>;
     onMove: (folderId: string) => Promise<void>;
@@ -27,6 +28,7 @@ export default function PageReader({
     folder,
     folders,
     page,
+    canEdit,
     onBack,
     onUpdate,
     onMove,
@@ -64,15 +66,15 @@ export default function PageReader({
             <div className="page-reader-toolbar">
                 <button type="button" className="page-reader-back" onClick={onBack}><span aria-hidden="true">←</span> Wróć do folderu</button>
                 <div className="page-reader-actions">
-                    {!isArchive && !isTrash && <>
+                    {canEdit && !isArchive && !isTrash && <>
                         <button type="button" onClick={() => setDialog("edit")}>Edytuj</button>
                         <button type="button" onClick={() => setDialog("move")}>Przenieś</button>
                         <button type="button" onClick={() => void runAction(onArchive)} disabled={isActionRunning}>Archiwizuj</button>
                         <button type="button" className="danger-action" onClick={() => void runAction(onTrash)} disabled={isActionRunning}>Do kosza</button>
                     </>}
-                    {(isArchive || isTrash) && <button type="button" onClick={() => void runAction(onRestore)} disabled={isActionRunning}>Przywróć</button>}
-                    {isArchive && <button type="button" className="danger-action" onClick={() => void runAction(onTrash)} disabled={isActionRunning}>Do kosza</button>}
-                    {isTrash && <button type="button" className="danger-action" onClick={() => setDialog("delete")}>Usuń trwale</button>}
+                    {canEdit && (isArchive || isTrash) && <button type="button" onClick={() => void runAction(onRestore)} disabled={isActionRunning}>Przywróć</button>}
+                    {canEdit && isArchive && <button type="button" className="danger-action" onClick={() => void runAction(onTrash)} disabled={isActionRunning}>Do kosza</button>}
+                    {canEdit && isTrash && <button type="button" className="danger-action" onClick={() => setDialog("delete")}>Usuń trwale</button>}
                 </div>
             </div>
 

@@ -21,6 +21,7 @@ interface Props {
         folderId: string,
         destinationFolderId: string | null,
     ) => Promise<void>;
+    canEdit: boolean;
 }
 
 interface CreateRequest {
@@ -35,6 +36,7 @@ export default function FolderList({
     onCreateFolder,
     onRenameFolder,
     onMoveFolder,
+    canEdit,
 }: Props) {
     const [createRequest, setCreateRequest] =
         useState<CreateRequest | null>(null);
@@ -72,18 +74,20 @@ export default function FolderList({
                     <h2>Foldery</h2>
                 </div>
 
-                <button
-                    type="button"
-                    className="folder-create-button"
-                    disabled={!worldName}
-                    onClick={() =>
-                        openCreateDialog(null)
-                    }
-                    aria-label="Utwórz folder"
-                    title="Nowy folder"
-                >
-                    ＋
-                </button>
+                {worldName && canEdit && (
+                    <button
+                        type="button"
+                        data-testid="folder-create-button"
+                        className="folder-create-button"
+                        onClick={() =>
+                            openCreateDialog(null)
+                        }
+                        aria-label="Utwórz folder"
+                        title="Nowy folder"
+                    >
+                        ＋
+                    </button>
+                )}
             </div>
 
             {!worldName ? (
@@ -105,11 +109,12 @@ export default function FolderList({
                             selectedFolderId={
                                 selectedFolderId
                             }
+                            canEdit={canEdit}
                             onSelectFolder={
                                 onSelectFolder
                             }
                             onCreateSubfolder={
-                                openCreateDialog
+                                canEdit ? openCreateDialog : () => undefined
                             }
                             onRenameFolder={
                                 onRenameFolder
@@ -122,7 +127,7 @@ export default function FolderList({
                 </ul>
             )}
 
-            {createRequest && (
+            {canEdit && createRequest && (
                 <FolderCreateDialog
                     folders={folders}
                     initialParentFolderId={

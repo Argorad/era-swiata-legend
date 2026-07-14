@@ -1,3 +1,4 @@
+using EraSwiataLegend.Api.Authorization;
 using EraSwiataLegend.Application.Pages.Commands;
 using EraSwiataLegend.Application.Pages.DTOs;
 using EraSwiataLegend.Application.Pages.Handlers;
@@ -8,22 +9,31 @@ namespace EraSwiataLegend.Api.Endpoints;
 public static class PageEndpoints
 {
     public static IEndpointRouteBuilder MapPageEndpoints(
-        this IEndpointRouteBuilder app)
+        this IEndpointRouteBuilder app,
+        IConfiguration configuration)
     {
         var group = app.MapGroup(
                 "/worlds/{worldId:guid}/folders/{folderId:guid}/pages")
             .WithTags("Pages");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            group.RequireAuthorization();
+        }
+
         group.MapGet("/",
             async (
                 Guid worldId,
                 Guid folderId,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 GetPagesQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
                 var pages = await handler.HandleAsync(
                     worldId,
                     folderId,
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken);
 
                 return Results.Ok(pages);
@@ -85,6 +95,9 @@ public static class PageEndpoints
                     $"/pages/{result.Page!.Id}",
                     result.Page);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<PageDto>(StatusCodes.Status201Created)
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
@@ -92,6 +105,11 @@ public static class PageEndpoints
         var pageGroup = app.MapGroup(
                 "/worlds/{worldId:guid}/pages/{pageId:guid}")
             .WithTags("Pages");
+
+        if (configuration.IsAuthenticationEnabled())
+        {
+            pageGroup.RequireAuthorization();
+        }
 
         pageGroup.MapPut("/",
             async (
@@ -122,7 +140,10 @@ public static class PageEndpoints
                     cancellationToken);
 
                 return PageResult(result);
-            });
+            })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         pageGroup.MapPatch("/move",
             async (
@@ -135,7 +156,10 @@ public static class PageEndpoints
                     worldId,
                     pageId,
                     request.DestinationFolderId,
-                    cancellationToken)));
+                    cancellationToken)))
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         pageGroup.MapPatch("/archive",
             async (
@@ -147,7 +171,10 @@ public static class PageEndpoints
                     worldId,
                     pageId,
                     FolderType.Archive,
-                    cancellationToken)));
+                    cancellationToken)))
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         pageGroup.MapPatch("/trash",
             async (
@@ -159,7 +186,10 @@ public static class PageEndpoints
                     worldId,
                     pageId,
                     FolderType.Trash,
-                    cancellationToken)));
+                    cancellationToken)))
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         pageGroup.MapPatch("/restore",
             async (
@@ -172,7 +202,10 @@ public static class PageEndpoints
                     worldId,
                     pageId,
                     request.DestinationFolderId,
-                    cancellationToken)));
+                    cancellationToken)))
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         pageGroup.MapDelete("/",
             async (
@@ -198,7 +231,10 @@ public static class PageEndpoints
                                 "Trwale usunąć można wyłącznie stronę znajdującą się w koszu."
                         })
                 };
-            });
+            })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator);
 
         return app;
     }

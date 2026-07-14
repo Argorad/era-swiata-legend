@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using EraSwiataLegend.Application.Interfaces;
 using EraSwiataLegend.Domain.Entities;
 using EraSwiataLegend.Domain.Enums;
@@ -7,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Application.Map;
 
-public sealed partial class MapCompositionService
+public sealed class MapCompositionService
 {
     private static readonly string[] MapImageTypes =
         ["image/png", "image/jpeg", "image/webp", "image/avif"];
@@ -79,7 +78,7 @@ public sealed partial class MapCompositionService
     {
         var map = await _db.WorldMaps.AsNoTracking().FirstOrDefaultAsync(
             item => item.Id == mapId && item.WorldId == worldId && item.Status == WorldMapStatus.Active, ct);
-        if (map is null || map.IsDrawingLayerLocked || !ValidStroke(request)) return null;
+        if (map is null || map.IsDrawingLayerLocked || !MapDrawingRequestValidator.IsValid(request)) return null;
         if (request.Id.HasValue && await _db.MapDrawingStrokes.AnyAsync(item => item.Id == request.Id.Value, ct)) return null;
         var stroke = new MapDrawingStroke
         {
@@ -109,7 +108,7 @@ public sealed partial class MapCompositionService
         if (stroke is null) return (null, "DrawingNotFound");
         if (map.IsDrawingLayerLocked || (stroke.IsLocked && (request.IsLocked || StrokeChanged(stroke, request))))
             return (null, "DrawingLocked");
-        if (!ValidStroke(request)) return (null, "InvalidDrawing");
+        if (!MapDrawingRequestValidator.IsValid(request)) return (null, "InvalidDrawing");
         ApplyStroke(stroke, request);
         stroke.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
@@ -153,31 +152,6 @@ public sealed partial class MapCompositionService
         return ToMapDto(map);
     }
 
-    public async Task<WorldMapDto?> ConfigureGridAsync(Guid worldId, Guid mapId, ConfigureMapGridRequest request, CancellationToken ct)
-    {
-        var map = await _db.WorldMaps.FirstOrDefaultAsync(item => item.Id == mapId && item.WorldId == worldId, ct);
-        if (map is null || request.Size is < 8 or > 512) return null;
-        try
-        {
-            map.ConfigureGrid(request.IsVisible, request.Size,
-                request.Style ?? map.GridStyle, request.Color ?? map.GridColor,
-                request.Opacity ?? map.GridOpacity, request.LineWidth ?? map.GridLineWidth,
-                request.MajorEvery ?? map.GridMajorEvery,
-                request.IsMajorVisible ?? map.IsGridMajorVisible,
-                request.IsSnapEnabled ?? map.IsSnapToGridEnabled,
-                request.CanvasBackground ?? map.CanvasBackground);
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
-        await _db.SaveChangesAsync(ct);
-        return new WorldMapDto(map.Id, map.WorldId, map.Name, map.Description, map.Type, map.ImageFileId,
-            map.IsPublished, map.IsGridVisible, map.GridSize, map.CanvasBackground, map.GridStyle, map.GridColor,
-            map.GridOpacity, map.GridLineWidth, map.GridMajorEvery, map.IsGridMajorVisible,
-            map.IsSnapToGridEnabled, map.IsDrawingLayerVisible, map.IsDrawingLayerLocked,
-            map.IsDrawingLayerVisibleToPlayers, map.Status, map.CreatedAt, map.UpdatedAt);
-    }
 
     private Task<bool> MapExists(Guid worldId, Guid mapId, CancellationToken ct) =>
         _db.WorldMaps.AnyAsync(map => map.Id == mapId && map.WorldId == worldId && map.Status == WorldMapStatus.Active, ct);
@@ -211,15 +185,6 @@ public sealed partial class MapCompositionService
             stroke.CreatedAt, stroke.Tool, stroke.FillColor, stroke.Opacity, stroke.DashStyle, stroke.Text,
             stroke.FontSize, stroke.HasTextBorder, stroke.Rotation, stroke.SortOrder, stroke.IsVisible, stroke.IsLocked);
 
-    private static bool ValidStroke(SaveMapDrawingStrokeRequest request) =>
-        request.Points.Count is >= 2 and <= 5000 && request.Width is >= 1 and <= 80 &&
-        HexRegex().IsMatch(request.Color) && request.Opacity is >= 0 and <= 1 &&
-        request.FontSize is >= 8 and <= 240 && request.SortOrder is >= 0 and <= 100000 &&
-        request.Tool is "pen" or "eraser" or "line" or "arrow" or "rectangle" or "ellipse" or "polygon" or "text" &&
-        request.DashStyle is "solid" or "dashed" or "dotted" && request.Text.Length <= 2000 &&
-        request.Points.All(point => double.IsFinite(point.X) && double.IsFinite(point.Y) &&
-            Math.Abs(point.X) <= 1000000 && Math.Abs(point.Y) <= 1000000);
-
     private static void ApplyStroke(MapDrawingStroke stroke, SaveMapDrawingStrokeRequest request)
     {
         stroke.Color = request.Color; stroke.Width = request.Width;
@@ -243,12 +208,7 @@ public sealed partial class MapCompositionService
 
     private static WorldMapDto ToMapDto(WorldMap map) => new(
         map.Id, map.WorldId, map.Name, map.Description, map.Type, map.ImageFileId,
-        map.IsPublished, map.IsGridVisible, map.GridSize, map.CanvasBackground,
-        map.GridStyle, map.GridColor, map.GridOpacity, map.GridLineWidth,
-        map.GridMajorEvery, map.IsGridMajorVisible, map.IsSnapToGridEnabled,
-        map.IsDrawingLayerVisible, map.IsDrawingLayerLocked,
+        map.IsPublished, map.IsDrawingLayerVisible, map.IsDrawingLayerLocked,
         map.IsDrawingLayerVisibleToPlayers, map.Status, map.CreatedAt, map.UpdatedAt);
 
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
-    private static partial Regex HexRegex();
 }

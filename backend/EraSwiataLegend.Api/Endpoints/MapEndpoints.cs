@@ -14,15 +14,21 @@ public static class MapEndpoints
         var maps = app.MapGroup("/worlds/{worldId:guid}/maps")
             .WithTags("Maps");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            maps.RequireAuthorization();
+        }
+
         maps.MapGet("/",
             async (
                 Guid worldId,
-                bool playerView,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 WorldMapService service,
                 CancellationToken cancellationToken) =>
                 Results.Ok(await service.GetAsync(
                     worldId,
-                    playerView,
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken)));
 
         Protect(maps.MapPost("/",
@@ -77,15 +83,21 @@ public static class MapEndpoints
                 "/worlds/{worldId:guid}/map-categories")
             .WithTags("Map categories");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            categories.RequireAuthorization();
+        }
+
         categories.MapGet("/",
             async (
                 Guid worldId,
-                bool playerView,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 MarkerCategoryService service,
                 CancellationToken cancellationToken) =>
                 Results.Ok(await service.GetAsync(
                     worldId,
-                    playerView,
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken)));
 
         Protect(categories.MapPost("/",
@@ -116,18 +128,24 @@ public static class MapEndpoints
                 "/worlds/{worldId:guid}/maps/{mapId:guid}/markers")
             .WithTags("Map markers");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            markers.RequireAuthorization();
+        }
+
         markers.MapGet("/",
             async (
                 Guid worldId,
                 Guid mapId,
-                bool playerView,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 MapMarkerStatus? status,
                 MapMarkerService service,
                 CancellationToken cancellationToken) =>
                 Results.Ok(await service.GetAsync(
                     worldId,
                     mapId,
-                    playerView,
+                    httpContext.EffectivePlayerView(configuration),
                     status ?? MapMarkerStatus.Active,
                     cancellationToken)));
 
@@ -242,16 +260,18 @@ public static class MapEndpoints
         var composition = app.MapGroup("/worlds/{worldId:guid}/maps/{mapId:guid}")
             .WithTags("Map composition");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            composition.RequireAuthorization();
+        }
+
         composition.MapGet("/images/{fileId:guid}",
-            async (Guid worldId, Guid mapId, Guid fileId, bool playerView,
+            async (Guid worldId, Guid mapId, Guid fileId,
                 HttpContext httpContext, FileLibraryService service,
+                IConfiguration configuration,
                 CancellationToken cancellationToken) =>
             {
-                var authenticationEnabled = configuration.GetValue<bool>("Authentication:Enabled");
-                if (authenticationEnabled && httpContext.User.Identity?.IsAuthenticated != true)
-                    return Results.Unauthorized();
-                var effectivePlayerView = playerView ||
-                    (authenticationEnabled && httpContext.User.IsInRole("Player"));
+                var effectivePlayerView = httpContext.EffectivePlayerView(configuration);
                 var content = await service.OpenMapImageAsync(
                     worldId, mapId, fileId, effectivePlayerView, cancellationToken);
                 return content is null ? Results.NotFound() : Results.File(
@@ -259,9 +279,14 @@ public static class MapEndpoints
             });
 
         composition.MapGet("/layers",
-            async (Guid worldId, Guid mapId, bool playerView,
+            async (Guid worldId, Guid mapId, HttpContext httpContext,
+                IConfiguration configuration,
                 MapCompositionService service, CancellationToken cancellationToken) =>
-                Results.Ok(await service.GetLayersAsync(worldId, mapId, playerView, cancellationToken)));
+                Results.Ok(await service.GetLayersAsync(
+                    worldId,
+                    mapId,
+                    httpContext.EffectivePlayerView(configuration),
+                    cancellationToken)));
         Protect(composition.MapPost("/layers",
             async (Guid worldId, Guid mapId, SaveMapImageLayerRequest request,
                 MapCompositionService service, CancellationToken cancellationToken) =>
@@ -284,9 +309,14 @@ public static class MapEndpoints
             }), configuration);
 
         composition.MapGet("/drawings",
-            async (Guid worldId, Guid mapId, bool playerView,
+            async (Guid worldId, Guid mapId, HttpContext httpContext,
+                IConfiguration configuration,
                 MapCompositionService service, CancellationToken cancellationToken) =>
-                Results.Ok(await service.GetStrokesAsync(worldId, mapId, playerView, cancellationToken)));
+                Results.Ok(await service.GetStrokesAsync(
+                    worldId,
+                    mapId,
+                    httpContext.EffectivePlayerView(configuration),
+                    cancellationToken)));
         Protect(composition.MapPost("/drawings",
             async (Guid worldId, Guid mapId, SaveMapDrawingStrokeRequest request,
                 MapCompositionService service, CancellationToken cancellationToken) =>
@@ -339,13 +369,6 @@ public static class MapEndpoints
                 var map = await service.ConfigureDrawingLayerAsync(
                     worldId, mapId, request, cancellationToken);
                 return map is null ? Results.NotFound() : Results.Ok(map);
-            }), configuration);
-        Protect(composition.MapPatch("/grid",
-            async (Guid worldId, Guid mapId, ConfigureMapGridRequest request,
-                MapCompositionService service, CancellationToken cancellationToken) =>
-            {
-                var map = await service.ConfigureGridAsync(worldId, mapId, request, cancellationToken);
-                return map is null ? Results.BadRequest() : Results.Ok(map);
             }), configuration);
 
         return app;

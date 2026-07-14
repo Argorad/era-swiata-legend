@@ -13,12 +13,19 @@ public sealed class GetPagesQueryHandler
         _dbContext = dbContext;
     }
 
+    public Task<List<PageDto>> HandleAsync(
+        Guid worldId,
+        Guid folderId,
+        CancellationToken cancellationToken = default) =>
+        HandleAsync(worldId, folderId, false, cancellationToken);
+
     public async Task<List<PageDto>> HandleAsync(
         Guid worldId,
         Guid folderId,
+        bool playerView,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.Pages
+        var pages = await _dbContext.Pages
             .AsNoTracking()
             .Where(page =>
                 page.WorldId == worldId &&
@@ -34,5 +41,42 @@ public sealed class GetPagesQueryHandler
                 page.CreatedAt,
                 page.UpdatedAt))
             .ToListAsync(cancellationToken);
+
+        if (!playerView)
+        {
+            return pages;
+        }
+
+        var folders = await _dbContext.Folders
+            .AsNoTracking()
+            .Where(folder => folder.WorldId == worldId)
+            .Select(folder => new
+            {
+                folder.Id,
+                folder.ParentFolderId,
+                folder.IsVisibleToPlayers
+            })
+            .ToDictionaryAsync(folder => folder.Id, cancellationToken);
+
+        return pages.Where(page =>
+        {
+            var currentFolderId = page.FolderId;
+            var visited = new HashSet<Guid>();
+
+            while (currentFolderId.HasValue && visited.Add(currentFolderId.Value))
+            {
+                if (!folders.TryGetValue(
+                        currentFolderId.Value,
+                        out var folder) ||
+                    !folder.IsVisibleToPlayers)
+                {
+                    return false;
+                }
+
+                currentFolderId = folder.ParentFolderId;
+            }
+
+            return currentFolderId is null;
+        }).ToList();
     }
 }

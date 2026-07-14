@@ -3,5 +3,6 @@
   <Project Path="EraSwiataLegend.Application/EraSwiataLegend.Application.csproj" />
   <Project Path="EraSwiataLegend.Domain/EraSwiataLegend.Domain.csproj" />
   <Project Path="EraSwiataLegend.Infrastructure/EraSwiataLegend.Infrastructure.csproj" />
+  <Project Path="EraSwiataLegend.IntegrationTests/EraSwiataLegend.IntegrationTests.csproj" />
   <Project Path="EraSwiataLegend.Tests/EraSwiataLegend.Tests.csproj" />
 </Solution>

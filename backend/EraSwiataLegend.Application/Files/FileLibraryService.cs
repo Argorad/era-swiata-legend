@@ -10,6 +10,11 @@ public sealed class FileLibraryService
     public const long MaximumFileSize = 20 * 1024 * 1024;
     public const long MaximumMapImageSize = 50 * 1024 * 1024;
 
+    private sealed record FolderVisibility(
+        Guid Id,
+        Guid? ParentFolderId,
+        bool IsVisibleToPlayers);
+
     private static readonly HashSet<string> AllowedExtensions =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -47,8 +52,15 @@ public sealed class FileLibraryService
         Guid worldId,
         Guid folderId,
         CancellationToken cancellationToken)
+        => GetFilesAsync(worldId, folderId, false, cancellationToken);
+
+    public async Task<List<FileDto>> GetFilesAsync(
+        Guid worldId,
+        Guid folderId,
+        bool playerView,
+        CancellationToken cancellationToken)
     {
-        return _dbContext.FileAttachments
+        var files = await _dbContext.FileAttachments
             .AsNoTracking()
             .Where(file =>
                 file.WorldId == worldId &&
@@ -66,12 +78,36 @@ public sealed class FileLibraryService
                 file.CreatedAt,
                 file.UpdatedAt))
             .ToListAsync(cancellationToken);
+
+        if (!playerView)
+        {
+            return files;
+        }
+
+        var folders = await _dbContext.Folders
+            .AsNoTracking()
+            .Where(folder => folder.WorldId == worldId)
+            .Select(folder => new FolderVisibility(
+                folder.Id,
+                folder.ParentFolderId,
+                folder.IsVisibleToPlayers))
+            .ToDictionaryAsync(folder => folder.Id, cancellationToken);
+
+        return files.Where(file =>
+            IsVisibleToPlayer(file.FolderId, folders)).ToList();
     }
 
     public Task<List<FileDto>> GetMapImagesAsync(
         Guid worldId,
         CancellationToken cancellationToken) =>
-        _dbContext.FileAttachments
+        GetMapImagesAsync(worldId, false, cancellationToken);
+
+    public async Task<List<FileDto>> GetMapImagesAsync(
+        Guid worldId,
+        bool playerView,
+        CancellationToken cancellationToken)
+    {
+        var images = await _dbContext.FileAttachments
             .AsNoTracking()
             .Where(file =>
                 file.WorldId == worldId &&
@@ -87,6 +123,25 @@ public sealed class FileLibraryService
                 file.Size, file.ContentType, file.IsVisibleToPlayers,
                 file.CreatedAt, file.UpdatedAt))
             .ToListAsync(cancellationToken);
+
+        if (!playerView)
+        {
+            return images;
+        }
+
+        var folders = await _dbContext.Folders
+            .AsNoTracking()
+            .Where(folder => folder.WorldId == worldId)
+            .Select(folder => new FolderVisibility(
+                folder.Id,
+                folder.ParentFolderId,
+                folder.IsVisibleToPlayers))
+            .ToDictionaryAsync(folder => folder.Id, cancellationToken);
+
+        return images.Where(file =>
+            file.IsVisibleToPlayers &&
+            IsVisibleToPlayer(file.FolderId, folders)).ToList();
+    }
 
     public async Task<FileOperationResult> UploadMapImageAsync(
         Guid worldId,
@@ -404,6 +459,32 @@ public sealed class FileLibraryService
         }
 
         return contentType.Trim();
+    }
+
+    private static bool IsVisibleToPlayer(
+        Guid folderId,
+        IReadOnlyDictionary<Guid, FolderVisibility> folders)
+    {
+        var current = folderId;
+        var visited = new HashSet<Guid>();
+
+        while (visited.Add(current))
+        {
+            if (!folders.TryGetValue(current, out var folder) ||
+                !folder.IsVisibleToPlayers)
+            {
+                return false;
+            }
+
+            if (folder.ParentFolderId is null)
+            {
+                return true;
+            }
+
+            current = folder.ParentFolderId;
+        }
+
+        return false;
     }
 
     private static FileDto ToDto(FileAttachment file) =>

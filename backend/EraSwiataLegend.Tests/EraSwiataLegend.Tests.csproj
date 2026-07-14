@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\EraSwiataLegend.Domain\EraSwiataLegend.Domain.csproj" />
+    <ProjectReference Include="..\EraSwiataLegend.Application\EraSwiataLegend.Application.csproj" />
   </ItemGroup>
 </Project>

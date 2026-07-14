@@ -4,15 +4,11 @@ import type { MapDrawingStroke, MapStrokePoint } from "../types/MapComposition";
 
 interface Props {
     strokes: MapDrawingStroke[];
-    width: number;
-    height: number;
     scale: number;
     editMode: boolean;
     selectMode: boolean;
     layerLocked: boolean;
     protectLocked: boolean;
-    snapToGrid: boolean;
-    gridSize: number;
     selectedId: string | null;
     onSelect: (stroke: MapDrawingStroke | null) => void;
     onCommit: (before: MapDrawingStroke, after: MapDrawingStroke, label: string) => void;
@@ -20,6 +16,8 @@ interface Props {
 }
 
 interface Bounds { x: number; y: number; width: number; height: number; cx: number; cy: number }
+const worldMin = -100000;
+const worldSize = 200000;
 const path = (points: MapStrokePoint[]) => points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
 const bounds = (stroke: MapDrawingStroke): Bounds => {
     if (stroke.tool === "text") {
@@ -70,8 +68,8 @@ export default function MapAnnotationEditor(props: Props) {
         } else if (drag.mode === "rotate") {
             const box = bounds(drag.stroke);
             const rect = (event.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
-            const px = (event.clientX - rect.left) / props.scale - props.width * 4;
-            const py = (event.clientY - rect.top) / props.scale - props.height * 4;
+            const px = (event.clientX - rect.left) / props.scale + worldMin;
+            const py = (event.clientY - rect.top) / props.scale + worldMin;
             next = { ...drag.stroke, rotation: Math.atan2(py - box.cy, px - box.cx) * 180 / Math.PI + 90 };
         } else {
             const box = bounds(drag.stroke);
@@ -83,10 +81,6 @@ export default function MapAnnotationEditor(props: Props) {
                 ? { ...drag.stroke, fontSize: Math.max(8, Math.min(240, drag.stroke.fontSize * Math.max(sx, sy))) }
                 : { ...drag.stroke, points: drag.stroke.points.map((point) => ({ x: anchorX + (point.x-anchorX)*sx, y: anchorY + (point.y-anchorY)*sy })) };
         }
-        if (props.snapToGrid) next = { ...next, points: next.points.map((point) => ({
-            x: Math.round(point.x / props.gridSize) * props.gridSize,
-            y: Math.round(point.y / props.gridSize) * props.gridSize,
-        })) };
         drag.latest = next;
         props.onSelect(next);
     };
@@ -108,13 +102,13 @@ export default function MapAnnotationEditor(props: Props) {
         event.currentTarget.setPointerCapture(event.pointerId);
     };
 
-    return <svg className={`map-annotation-editor ${props.selectMode ? "is-selecting" : ""}`} style={{ left: -props.width * 4, top: -props.height * 4, width: props.width * 9, height: props.height * 9, "--annotation-inverse-scale": String(1 / props.scale) } as CSSProperties} viewBox={`${-props.width * 4} ${-props.height * 4} ${props.width * 9} ${props.height * 9}`} aria-label="Warstwa adnotacji">
+    return <svg className={`map-annotation-editor ${props.selectMode ? "is-selecting" : ""}`} style={{ left: worldMin, top: worldMin, width: worldSize, height: worldSize, "--annotation-inverse-scale": String(1 / props.scale) } as CSSProperties} viewBox={`${worldMin} ${worldMin} ${worldSize} ${worldSize}`} aria-label="Warstwa adnotacji">
         <defs><marker id="annotation-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="context-stroke" /></marker></defs>
         {props.strokes.filter((stroke) => stroke.isVisible && !stroke.isEraser).sort((a,b) => a.sortOrder-b.sortOrder).map((stroke) => {
             const box = bounds(stroke); const selected = props.selectedId === stroke.id;
-            return <g key={stroke.id} className={`map-annotation ${selected ? "is-selected" : ""} ${stroke.isLocked ? "is-locked" : ""}`} transform={`rotate(${stroke.rotation} ${box.cx} ${box.cy})`} onContextMenu={(event) => props.onContextMenu(event, stroke)} onPointerDown={(event) => start(event, stroke, "move")} onPointerMove={updateDrag} onPointerUp={finish}>
+            return <g key={stroke.id} data-testid="map-annotation" className={`map-annotation ${selected ? "is-selected" : ""} ${stroke.isLocked ? "is-locked" : ""}`} transform={`rotate(${stroke.rotation} ${box.cx} ${box.cy})`} onContextMenu={(event) => props.onContextMenu(event, stroke)} onPointerDown={(event) => start(event, stroke, "move")} onPointerMove={updateDrag} onPointerUp={finish}>
                 <Shape stroke={stroke} />
-                {selected && props.editMode && props.selectMode && <g className="annotation-transformer"><rect x={box.x-5} y={box.y-5} width={box.width+10} height={box.height+10} /><line x1={box.cx} y1={box.y-5} x2={box.cx} y2={box.y-32} /><circle cx={box.cx} cy={box.y-36} r="6" onPointerDown={(event) => start(event, stroke, "rotate")} />{[[box.x-5,box.y-5,"nw"],[box.x+box.width+5,box.y-5,"ne"],[box.x-5,box.y+box.height+5,"sw"],[box.x+box.width+5,box.y+box.height+5,"se"]].map(([x,y,handle]) => <rect key={String(handle)} x={Number(x)-5} y={Number(y)-5} width="10" height="10" onPointerDown={(event) => start(event, stroke, "resize", String(handle))} />)}</g>}
+                {selected && props.editMode && props.selectMode && <g data-testid="annotation-transformer" className="annotation-transformer"><rect x={box.x-5} y={box.y-5} width={box.width+10} height={box.height+10} /><line x1={box.cx} y1={box.y-5} x2={box.cx} y2={box.y-32} /><circle cx={box.cx} cy={box.y-36} r="6" onPointerDown={(event) => start(event, stroke, "rotate")} />{[[box.x-5,box.y-5,"nw"],[box.x+box.width+5,box.y-5,"ne"],[box.x-5,box.y+box.height+5,"sw"],[box.x+box.width+5,box.y+box.height+5,"se"]].map(([x,y,handle]) => <rect key={String(handle)} x={Number(x)-5} y={Number(y)-5} width="10" height="10" onPointerDown={(event) => start(event, stroke, "resize", String(handle))} />)}</g>}
             </g>;
         })}
     </svg>;

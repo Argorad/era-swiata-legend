@@ -8,7 +8,7 @@ public static class ReadinessEndpoints
         this IEndpointRouteBuilder app,
         IConfiguration configuration)
     {
-        app.MapGet("/auth/status", () =>
+        app.MapGet("/readiness/status", () =>
             Results.Ok(new
             {
                 enabled = configuration.GetValue<bool>(

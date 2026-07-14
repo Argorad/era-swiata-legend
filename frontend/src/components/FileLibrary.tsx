@@ -6,6 +6,7 @@ import type { Folder } from "../types/Folder";
 interface Props {
     worldId: string;
     folder: Folder;
+    canEdit: boolean;
 }
 
 function formatSize(size: number): string {
@@ -14,7 +15,7 @@ function formatSize(size: number): string {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function FileLibrary({ worldId, folder }: Props) {
+export default function FileLibrary({ worldId, folder, canEdit }: Props) {
     const [files, setFiles] = useState<FileAttachment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
@@ -122,7 +123,7 @@ export default function FileLibrary({ worldId, folder }: Props) {
                 <div className="content-section-heading"><span>Materiały</span><h2>Pliki</h2></div>
                 <div className="page-section-actions">
                     <span className="content-count-badge">{isLoading ? "…" : files.length}</span>
-                    {folder.type === 0 && <label className={`file-upload-button${isUploading ? " is-disabled" : ""}`}>
+                    {canEdit && folder.type === 0 && <label className={`file-upload-button${isUploading ? " is-disabled" : ""}`}>
                         {isUploading ? "Dodawanie..." : "＋ Dodaj plik"}
                         <input ref={inputRef} type="file" disabled={isUploading} accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.docx,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} />
                     </label>}
@@ -131,7 +132,7 @@ export default function FileLibrary({ worldId, folder }: Props) {
             {error && <div className="pages-status-state pages-status-state--error" role="alert"><strong>Błąd plików</strong><p>{error}</p><button type="button" onClick={() => void loadFiles()}>Spróbuj ponownie</button></div>}
             {!error && isLoading && <div className="pages-status-state"><strong>Wczytywanie plików...</strong></div>}
             {!error && !isLoading && files.length === 0 && <div className="section-empty-state"><span>▧</span><div><strong>Brak plików</strong><p>Dodaj mapy, ilustracje lub dokumenty związane z tym folderem.</p></div></div>}
-            {!error && !isLoading && files.length > 0 && <div className="file-list">{files.map((file) => <article key={file.id} className="file-card"><span className="file-card-icon">▧</span><div><strong>{file.originalName}</strong><small>{formatSize(file.size)} · {file.contentType}</small></div><div className="file-card-actions"><button type="button" onClick={() => void download(file)}>Pobierz</button>{folder.type === 2 ? <button type="button" onClick={() => void restore(file)}>Przywróć</button> : <button type="button" className="danger-action" onClick={() => void trash(file)}>Do kosza</button>}</div></article>)}</div>}
+            {!error && !isLoading && files.length > 0 && <div className="file-list">{files.map((file) => <article key={file.id} className="file-card"><span className="file-card-icon">▧</span><div><strong>{file.originalName}</strong><small>{formatSize(file.size)} · {file.contentType}</small></div><div className="file-card-actions"><button type="button" onClick={() => void download(file)}>Pobierz</button>{canEdit && (folder.type === 2 ? <button type="button" onClick={() => void restore(file)}>Przywróć</button> : <button type="button" className="danger-action" onClick={() => void trash(file)}>Do kosza</button>)}</div></article>)}</div>}
         </section>
     );
 }

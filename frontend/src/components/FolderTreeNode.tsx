@@ -19,6 +19,7 @@ interface Props {
         folderId: string,
         destinationFolderId: string | null,
     ) => Promise<void>;
+    canEdit: boolean;
 }
 
 export default function FolderTreeNode({
@@ -30,6 +31,7 @@ export default function FolderTreeNode({
     onCreateSubfolder,
     onRenameFolder,
     onMoveFolder,
+    canEdit,
 }: Props) {
     const [isExpanded, setIsExpanded] =
         useState(true);
@@ -98,6 +100,7 @@ export default function FolderTreeNode({
                         selectedFolderId ===
                         folder.id
                     }
+                    canEdit={canEdit}
                     onSelectFolder={
                         onSelectFolder
                     }
@@ -139,6 +142,7 @@ export default function FolderTreeNode({
                                 onMoveFolder={
                                     onMoveFolder
                                 }
+                                canEdit={canEdit}
                             />
                         ),
                     )}

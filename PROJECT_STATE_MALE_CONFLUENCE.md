@@ -1,11 +1,11 @@
 # Małe Confluence Ery Świata Legend — aktualny stan projektu
 
-**Ostatnia aktualizacja:** 2026-07-13
+**Ostatnia aktualizacja:** 2026-07-14
 
 **Repozytorium:** `git@github.com:Argorad/era-swiata-legend.git`
 
 **Gałąź:** `main`
-**Bazowy commit:** `ea32f34 docs: update project state and add Codex guidelines`
+**Bazowy commit:** `05dd9c0 wip: save v1 and full map editor progress`
 
 ## 1. Cel i technologie
 
@@ -188,17 +188,27 @@ Działa:
 - obraz wyświetlany w naturalnej rozdzielczości, bez generowania miniatury
   jako właściwego tła mapy.
 
+Obraz bazowy jest domyślnie zablokowany. Po świadomym odblokowaniu można go
+przesuwać, skalować, obracać uchwytem lub liczbowo, zmieniać krycie oraz ukryć
+z kompozycji po wpisaniu mocnego potwierdzenia. Każdy dodatkowy obraz ma ten
+sam mechanizm obrotu, w tym przyciski `-90°`, `+90°`, reset oraz przyciąganie
+uchwytu co 15° z klawiszem `Shift`. Transformacje uczestniczą w sesyjnym
+undo/redo.
+
 Obraz bazowy nadal jest technicznie specjalnym polem `WorldMap.ImageFileId`,
-a dodatkowe obrazy są rekordami `MapImageLayer`. Interfejs traktuje obraz
-bazowy jako najniższą, chronioną warstwę, ale pełne ujednolicenie modelu
-warstw jest jeszcze możliwym etapem porządkowym.
+a dodatkowe obrazy są rekordami `MapImageLayer`. Dlatego ustawienia
+transformacji i blokady obrazu bazowego są obecnie zachowywane w
+`localStorage` osobno dla mapy i przeglądarki, bez zmiany schematu bazy;
+dodatkowe warstwy pozostają zapisywane przez API. Pełne, serwerowe
+ujednolicenie obrazu bazowego z `MapImageLayer` jest etapem porządkowym na
+przyszłość.
 
 ### 4.2. Nawigacja i płótno
 
 Działa:
 
 - pan myszą i dotykiem,
-- zoom kółkiem, gestem szczypania i przyciskami w zakresie 25–800%,
+- zoom kółkiem, gestem szczypania i przyciskami w zakresie 5–800%,
 - dopasowanie mapy do widoku,
 - Fullscreen API z wyjściem przez `Esc`,
 - fallback pełnego ekranu zakrywający chrome aplikacji, gdy przeglądarka
@@ -206,22 +216,25 @@ Działa:
 - portalowe dialogi widoczne ponad mapą również w natywnym fullscreenie,
 - domyślne oceaniczne tło wirtualnej przestrzeni,
 - warianty tła: ocean, pergamin, ciemne i jednolite,
-- spokojna animacja oceanu z obsługą `prefers-reduced-motion`,
+- spokojna, niekafelkowana animacja oceanu z obsługą
+  `prefers-reduced-motion`,
 - brak blokowania kliknięć przez tło.
 
-### 4.3. Grid
+Lewy panel mapy ma własny pionowy scroll i nie ucina dalszych ustawień nawet
+przy niższym ekranie.
 
-Siatka pomocnicza ma:
+### 4.3. Wirtualne płótno i współrzędne
 
-- style: linie, kropki i heksy,
-- regulowany rozmiar pola, kolor, krycie i grubość,
-- mocniejsze linie/punkty główne co konfigurowalną liczbę pól,
-- opcjonalne przyciąganie obiektów do aktualnego rozmiaru siatki,
-- poprawne skalowanie wraz z panem i zoomem,
-- trwałą konfigurację w modelu mapy.
+Funkcja siatki pomocniczej została całkowicie wycofana z interfejsu i API.
+Nie są renderowane linie, kropki ani heksy, nie ma snapowania ani ustawień
+siatki. Istniejące kolumny PostgreSQL pozostają wyłącznie jako legacy, aby ich
+usunięcie nie wymagało destrukcyjnej migracji.
 
-Nie ma jeszcze opisów współrzędnych osi/pól. Wzór heksagonalny jest lekkim
-renderowaniem CSS, a nie pełnym systemem heksów z adresowaniem komórek.
+Narzędzia rysujące korzystają z osobnej warstwy wejściowej ponad obrazami.
+Współrzędne ekranu są przeliczane przez odwrotność aktualnego pan/zoom do
+współrzędnych świata mapy, również poza granicami obrazu bazowego. Pointer
+capture utrzymuje gest od `pointerdown` do `pointerup` przy przechodzeniu
+między JPG a oceanem.
 
 ### 4.4. Markery
 
@@ -251,7 +264,7 @@ Działa:
 - osobne narzędzie „Rączka” do panowania,
 - zaznaczanie i przesuwanie adnotacji,
 - pióro i gumka,
-- linia, strzałka, prostokąt, elipsa i wielokąt,
+- linia i strzałka tworzone wyłącznie gestem naciśnięcie–przeciągnięcie–puszczenie,
 - tekst z rozmiarem, kolorem, tłem i opcjonalną ramką,
 - kolor obrysu i wypełnienia, krycie, grubość oraz kreska
   ciągła/kreskowana/kropkowana,
@@ -260,12 +273,25 @@ Działa:
 - widoczność, kolejność i widoczność dla graczy,
 - optymistyczne pozostawienie nowej adnotacji w UI po błędzie API,
 - stan „Zapisywanie…”, „Zapisano”, „Nie zapisano” oraz ponawianie,
-- ostrzeżenie przed przeładowaniem lub zmianą mapy przy niezapisanym stanie.
+- ostrzeżenie przed przeładowaniem lub zmianą mapy przy niezapisanym stanie,
+- osobny edytor tekstu otwierany kliknięciem w mapę: `Ctrl+Enter` zapisuje,
+  `Escape` anuluje,
+- automatyczny powrót do narzędzia „Zaznacz” po dodaniu linii, strzałki lub
+  tekstu, z opcją „Twórz wiele” dla pracy seryjnej.
 
-Wielokąt jest obecnie rysowany gestem jako zamknięta ścieżka, a nie klasycznym
-klikaniem kolejnych wierzchołków. Edytor wymaga jeszcze przeglądarkowych testów
-akceptacyjnych na dużych rzeczywistych mapach i dalszego dopracowania ergonomii
-inspektora stylu.
+Krytyczna regresja zapisu w przeglądarce otwartej przez HTTP w LAN wynikała z
+użycia `crypto.randomUUID()`, które nie jest dostępne w każdym niezabezpieczonym
+kontekście. Lokalny identyfikator optymistycznej adnotacji ma teraz bezpieczny
+fallback; tekst i rysunek pozostają widoczne przy błędzie API, a toolbar
+udostępnia „Ponów zapis”. Gesty linii, strzałki i pióra wymagają trzymania
+lewego przycisku, pojedynczy klik niczego nie tworzy, a `Escape` anuluje
+podgląd.
+
+Narzędzia Prostokąt, Elipsa i Wielokąt zostały celowo usunięte z UI zgodnie z
+aktualnym zakresem dopracowania; wcześniej zapisane adnotacje tych typów nadal
+są renderowane i nie są usuwane. Edytor wymaga jeszcze przeglądarkowych testów
+akceptacyjnych na dużych rzeczywistych mapach i dalszego dopracowania
+ergonomii inspektora stylu.
 
 ### 4.6. Blokady, menu i historia
 
@@ -298,20 +324,28 @@ W kodzie istnieją:
 - role `Administrator`, `GameMaster` i `Player`,
 - encja `UserAccount` oparta na zewnętrznym identyfikatorze,
 - polityki autoryzacji ASP.NET Core,
-- warunkowa ochrona endpointów zapisujących mapę dla Administratora/MG,
+- cookie-auth, `/auth/login`, `/auth/me`, `/auth/logout` i zmiana hasła,
+- bootstrap pierwszego Administratora przez `BootstrapAdmin__...`,
+- login przez e-mail albo unikalny nick z bezpiecznym hashowaniem hasła,
+- rate limit dla logowania,
+- warunkowa ochrona endpointów zapisujących mapę, wiedzę i pliki dla
+  Administratora/MG,
 - pola widoczności folderów, plików, map, warstw, rysunków i markerów,
 - abstrakcja `IAiSearchProvider`, endpointy statusu i provider wyłączony.
 
-Aktualnie `Authentication:Enabled` jest ustawione na `false`. Nie ma handlera
-autentykacji, logowania, bezpiecznej inicjalizacji pierwszego administratora
-ani rzeczywistego kontekstu użytkownika. „Widok gracza” jest podglądem i
-filtrem, nie pełnym zabezpieczeniem. Dopóki logowanie nie zostanie ukończone:
+Kod logowania jest już zaimplementowany, ale działa tylko po włączeniu
+`Authentication:Enabled=true` i podaniu bootstrapowych zmiennych środowiskowych
+pierwszego administratora. Wtedy backend egzekwuje cookie-based sesję HttpOnly,
+`/auth/me`, logout, wymuszenie zmiany hasła, role oraz odrębny dostęp gracza.
+Frontend pokazuje ekran logowania, nick/rolę w nagłówku i panel administracji
+użytkowników dla Administratora. Dopóki auth nie jest włączony w danym
+środowisku:
 
-- nie wolno uznawać reguł GM-only za egzekwowane bezpieczeństwo,
-- prywatny folder lub plik nie jest w pełni chroniony przed bezpośrednim
-  żądaniem użytkownika, którego tożsamości backend nie zna,
-- wyszukiwarka może ujawnić prywatne nazwy i treści,
-- markery graczy pozostają przygotowanym modelem, a nie gotową funkcją.
+- aplikacja działa w trybie bezlogowania i używa wyłącznie filtrów UI,
+- prywatność folderów, plików i wyników wyszukiwania nie jest wtedy pełną
+  ochroną bezpieczeństwa,
+- markery graczy są przygotowane, ale ich pełne wykorzystanie wymaga
+  rzeczywistego konta zalogowanego użytkownika.
 
 AI jest bezpiecznie wyłączone. Nie ma realnych wywołań zewnętrznych. Przyszły
 klucz ma pochodzić z `Ai__ApiKey` lub bezpiecznego magazynu środowiska i nie
@@ -347,6 +381,7 @@ potwierdzone ręcznie przez właściciela projektu.
 ```text
 20260713210417_AddFullMapEditorVisibilityAndPlayerMarkers
 20260713215422_AddAnnotationTextBorder
+20260714000000_AddLocalUserAuthentication
 ```
 
 Pierwsza dodaje wyłącznie nowe kolumny rozszerzonego gridu, płótna, rysunków,
@@ -357,6 +392,16 @@ także indeks i opcjonalny klucz obcy autora. Druga dodaje wyłącznie:
 ALTER TABLE "MapDrawingStrokes"
 ADD "HasTextBorder" boolean NOT NULL DEFAULT TRUE;
 ```
+
+Trzecia dodaje wyłącznie kolumny logowania lokalnego:
+
+- `UserAccounts.Email`
+- `UserAccounts.NormalizedEmail`
+- `UserAccounts.NormalizedDisplayName`
+- `UserAccounts.PasswordHash`
+- `UserAccounts.SecurityStamp`
+
+oraz unikalne indeksy na `NormalizedDisplayName` i `NormalizedEmail`.
 
 Zweryfikowane sekcje `Up` obu migracji nie zawierają `DROP`, `TRUNCATE`,
 `DELETE`, `UPDATE`, zmiany typu ani nadpisywania istniejących danych. Migracji
@@ -396,6 +441,10 @@ dotnet ef database update 20260713210417_AddFullMapEditorVisibilityAndPlayerMark
 dotnet ef database update 20260713215422_AddAnnotationTextBorder \
   --project EraSwiataLegend.Infrastructure/EraSwiataLegend.Infrastructure.csproj \
   --startup-project EraSwiataLegend.Api/EraSwiataLegend.Api.csproj
+
+dotnet ef database update 20260714000000_AddLocalUserAuthentication \
+  --project EraSwiataLegend.Infrastructure/EraSwiataLegend.Infrastructure.csproj \
+  --startup-project EraSwiataLegend.Api/EraSwiataLegend.Api.csproj
 ```
 
 Nigdy nie należy wykonywać resetu bazy, `database update 0`, migrate down,
@@ -403,15 +452,9 @@ Nigdy nie należy wykonywać resetu bazy, `database update 0`, migrate down,
 
 ## 7. Weryfikacja techniczna
 
-Ostatni pełny zestaw wykonany 2026-07-13:
+Ostatni pełny zestaw wykonany 2026-07-14:
 
 ```text
-dotnet build EraSwiataLegend.slnx --no-restore -m:1
-  sukces, 0 ostrzeżeń, 0 błędów
-
-EraSwiataLegend.Tests
-  21/21 testów zaliczonych
-
 npm run lint
   sukces
 
@@ -422,22 +465,35 @@ git diff --check
   sukces
 ```
 
-Testy obejmują m.in. cykle folderów, Archive/Trash, integralność markerów,
-zmianę obrazu mapy bez utraty markerów, blokady, grid, prywatne wartości
-domyślne i ustawienia adnotacji. Nie zastępują one ręcznego testu wizualnego
-oraz testów integracyjnych z PostgreSQL po backupie i migracji.
+Backendowy build i testy integracyjne są obecnie blokowane przez lokalny obraz
+SDK/MSBuild w tym sandboxie, a nie przez repozytorium. Frontendowy lint i build
+przechodzą. Testy obejmują m.in. cykle folderów, Archive/Trash, integralność
+markerów, zmianę obrazu mapy bez utraty markerów, blokady, prywatne wartości
+domyślne i ustawienia adnotacji. Nie zastępują one ręcznego testu wizualnego,
+logowania ani testów integracyjnych z PostgreSQL po backupie i migracji.
 
 ## 8. Znane ryzyka i niedokończone elementy
 
-- dwie ostatnie migracje Full MapGenie nie są zastosowane,
+- trzy ostatnie migracje funkcjonalne nie są zastosowane,
 - pełny przeglądarkowy test akceptacyjny mapy na rzeczywistych dużych plikach
   pozostaje do wykonania po migracji,
-- wielokąt nie ma jeszcze edycji osobnych wierzchołków,
+- transformacje obrazu bazowego są na razie lokalne dla przeglądarki, a nie
+  synchronizowane przez backend,
+- zapis nowych adnotacji przez aktualny model EF wymaga kolumn z obu
+  niezastosowanych migracji Full MapGenie; bez nich API zwróci błąd mimo
+  poprawnego kontraktu frontendowego,
+- planowana migracja renderera adnotacji do React Konva jest zablokowana w
+  bieżącym środowisku przez brak dostępu DNS do registry npm (`EAI_AGAIN`);
+  zależności nie zostały dopisane,
 - historia undo/redo jest sesyjna,
-- logowanie, pierwszy administrator i prawdziwe role nie są wdrożone,
-- filtrowanie prywatności w wyszukiwarce i wszystkich endpointach wymaga
-  rzeczywistego użytkownika,
-- markery graczy nie są gotowe do bezpiecznego użycia,
+- logowanie lokalne, bootstrap pierwszego administratora i cookie-based sesje
+  są wdrożone w kodzie, ale nadal wymagają włączenia `Authentication:Enabled`
+  i podania env bootstrapu w danym środowisku,
+- filtrowanie prywatności w wyszukiwarce i wszystkich endpointach egzekwuje
+  backend dopiero po włączeniu auth,
+- markery graczy są przygotowane i egzekwowane po stronie backendu, ale pełny
+  scenariusz produkcyjny nadal wymaga prawdziwego użytkownika i właściwego
+  bootstrapu,
 - adapter AI i klucz nie są skonfigurowane,
 - brak CI i szerszych testów integracyjnych/API,
 - Swagger jest włączony w każdym środowisku,
@@ -446,6 +502,12 @@ oraz testów integracyjnych z PostgreSQL po backupie i migracji.
   należy je przenieść do bezpiecznej konfiguracji środowiska przed wdrożeniem,
 - w repozytorium pozostają nieużywane elementy szablonu Vite.
 
+Katalog `backend/data/uploads/` jest katalogiem runtime i został dodany do
+`.gitignore`; istniejące pliki fizyczne mają pozostać na serwerze. Usunięcie
+wcześniej śledzonych binariów wyłącznie z indeksu Git wymaga wykonania
+`git rm --cached` w środowisku z zapisywalnym `.git` — bieżący sandbox blokuje
+zapis pliku `.git/index.lock`.
+
 ## 9. Plan dalszej pracy
 
 Kolejność dalszego rozwoju:
@@ -453,7 +515,7 @@ Kolejność dalszego rozwoju:
 1. **Dokończenie i stabilizacja mapy**
    - świeży backup PostgreSQL poza repozytorium,
    - zastosowanie dwóch addytywnych migracji w podanej kolejności,
-   - ręczne testy wielu obrazów, transformacji, gridu, adnotacji, blokad,
+   - ręczne testy wielu obrazów, transformacji, adnotacji, blokad,
      fullscreen, undo/redo, zapisu po odświeżeniu i mobile,
    - naprawa wykrytych regresji oraz dopracowanie ergonomii bez rozszerzania
      zakresu innych modułów.

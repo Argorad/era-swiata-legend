@@ -10,16 +10,6 @@ public sealed record WorldMapDto(
     WorldMapType Type,
     Guid ImageFileId,
     bool IsPublished,
-    bool IsGridVisible,
-    int GridSize,
-    string CanvasBackground,
-    string GridStyle,
-    string GridColor,
-    double GridOpacity,
-    double GridLineWidth,
-    int GridMajorEvery,
-    bool IsGridMajorVisible,
-    bool IsSnapToGridEnabled,
     bool IsDrawingLayerVisible,
     bool IsDrawingLayerLocked,
     bool IsDrawingLayerVisibleToPlayers,
@@ -187,18 +177,6 @@ public sealed record SaveMapDrawingStrokeRequest(
     bool IsVisible = true,
     bool IsLocked = false,
     Guid? Id = null);
-
-public sealed record ConfigureMapGridRequest(
-    bool IsVisible,
-    int Size,
-    string? Style = null,
-    string? Color = null,
-    double? Opacity = null,
-    double? LineWidth = null,
-    int? MajorEvery = null,
-    bool? IsMajorVisible = null,
-    bool? IsSnapEnabled = null,
-    string? CanvasBackground = null);
 
 public sealed record ConfigureDrawingLayerRequest(
     bool IsVisible,

@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import AuthGate from "../components/AuthGate";
 import FantasyCityBackdrop from "../components/FantasyCityBackdrop";
 import AiReadinessPanel from "../components/AiReadinessPanel";
 import FolderContent from "../components/FolderContent";
 import FolderList from "../components/FolderList";
 import GlobalSearch from "../components/GlobalSearch";
+import UserAdminPanel from "../components/UserAdminPanel";
 import WorldMap from "../components/WorldMap";
 import WorldList from "../components/WorldList";
 import { api } from "../services/api";
+import type { AuthMeResponse, AuthSession, AuthStatus, ChangePasswordRequest } from "../types/Auth";
 import type { Folder } from "../types/Folder";
 import type { Page } from "../types/Page";
 import type { SearchResult } from "../types/SearchResult";
@@ -18,6 +21,11 @@ export default function HomePage() {
     const [activeModule, setActiveModule] = useState<
         "knowledge" | "map" | "ai"
     >("knowledge");
+    const [authEnabled, setAuthEnabled] = useState(false);
+    const [authReady, setAuthReady] = useState(false);
+    const [currentUser, setCurrentUser] = useState<AuthSession | null>(null);
+    const [authError, setAuthError] = useState<string | null>(null);
+    const [authBusy, setAuthBusy] = useState(false);
     const [worlds, setWorlds] = useState<World[]>([]);
     const [isWorldsLoading, setIsWorldsLoading] = useState(true);
     const [worldsError, setWorldsError] = useState<string | null>(null);
@@ -46,14 +54,91 @@ export default function HomePage() {
         pages.find(
             (page) => page.id === selectedPageId,
         ) ?? null;
+    const canEdit = !authEnabled || currentUser?.role !== 2;
+
+    const clearPageState = useCallback(() => {
+        setPages([]);
+        setSelectedPageId(null);
+        setIsPagesLoading(false);
+        setPagesError(null);
+    }, []);
+
+    const resetWorkspace = useCallback(() => {
+        setWorlds([]);
+        setWorldsError(null);
+        setIsWorldsLoading(false);
+        setFolders([]);
+        setSelectedWorld(null);
+        setSelectedFolderId(null);
+        clearPageState();
+        setPagesReloadKey(0);
+        setWorldsReloadKey(0);
+    }, [clearPageState]);
 
     useEffect(() => {
-        api.get<World[]>("/worlds")
-            .then((response) => {
+        let cancelled = false;
+
+        const loadAuthState = async () => {
+            try {
+                const statusResponse = await api.get<AuthStatus>("/auth/status");
+                if (cancelled) return;
+                setAuthEnabled(statusResponse.data.enabled);
+
+                if (statusResponse.data.enabled) {
+                    const meResponse = await api.get<AuthMeResponse>("/auth/me");
+                    if (cancelled) return;
+                    setCurrentUser(meResponse.data.user);
+                } else {
+                    setCurrentUser(null);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Nie udało się sprawdzić sesji:", error);
+                    setAuthEnabled(false);
+                    setCurrentUser(null);
+                }
+            } finally {
+                if (!cancelled) {
+                    setAuthReady(true);
+                }
+            }
+        };
+
+        const handleExpired = () => {
+            if (cancelled) {
+                return;
+            }
+
+            setCurrentUser(null);
+            setAuthError("Sesja wygasła. Zaloguj się ponownie.");
+            resetWorkspace();
+        };
+
+        window.addEventListener("era-auth-expired", handleExpired);
+        void loadAuthState();
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener("era-auth-expired", handleExpired);
+        };
+    }, [resetWorkspace]);
+
+    useEffect(() => {
+        if (!authReady || (authEnabled && !currentUser)) {
+            return;
+        }
+
+        let cancelled = false;
+
+        void (async () => {
+            setIsWorldsLoading(true);
+            try {
+                const response = await api.get<World[]>("/worlds");
+                if (cancelled) return;
                 setWorlds(response.data);
                 setWorldsError(null);
-            })
-            .catch((error) => {
+            } catch (error) {
+                if (cancelled) return;
                 console.error(
                     "Nie udało się pobrać światów:",
                     error,
@@ -61,12 +146,20 @@ export default function HomePage() {
                 setWorldsError(
                     "Nie udało się połączyć z API i pobrać światów.",
                 );
-            })
-            .finally(() => setIsWorldsLoading(false));
-    }, [worldsReloadKey]);
+            } finally {
+                if (!cancelled) {
+                    setIsWorldsLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [authEnabled, authReady, currentUser, worldsReloadKey]);
 
     useEffect(() => {
-        if (!selectedWorld) {
+        if (!authReady || (authEnabled && !currentUser) || !selectedWorld) {
             return;
         }
 
@@ -74,6 +167,7 @@ export default function HomePage() {
             try {
                 const response = await api.get<Folder[]>(
                     `/worlds/${selectedWorld.id}/folders`,
+                    { params: { playerView: false } },
                 );
 
                 setFolders(response.data);
@@ -89,10 +183,10 @@ export default function HomePage() {
         };
 
         void loadFolders();
-    }, [selectedWorld]);
+    }, [authEnabled, authReady, currentUser, selectedWorld]);
 
     useEffect(() => {
-        if (!selectedWorld || !selectedFolderId) {
+        if (!authReady || (authEnabled && !currentUser) || !selectedWorld || !selectedFolderId) {
             return;
         }
 
@@ -131,13 +225,63 @@ export default function HomePage() {
         return () => {
             isCurrentRequest = false;
         };
-    }, [selectedWorld, selectedFolderId, pagesReloadKey]);
+    }, [authEnabled, authReady, currentUser, selectedWorld, selectedFolderId, pagesReloadKey]);
 
-    const clearPageState = () => {
-        setPages([]);
-        setSelectedPageId(null);
-        setIsPagesLoading(false);
-        setPagesError(null);
+    const handleLogin = async (
+        login: string,
+        password: string,
+    ) => {
+        try {
+            setAuthBusy(true);
+            setAuthError(null);
+
+            const response = await api.post<AuthSession>("/auth/login", {
+                login,
+                password,
+            });
+
+            setCurrentUser(response.data);
+            resetWorkspace();
+        } catch {
+            setAuthError("Nieprawidłowy login, e-mail albo hasło.");
+        } finally {
+            setAuthBusy(false);
+        }
+    };
+
+    const handleChangePassword = async (
+        currentPassword: string,
+        newPassword: string,
+    ) => {
+        try {
+            setAuthBusy(true);
+            setAuthError(null);
+
+            const response = await api.post<AuthSession>(
+                "/auth/change-password",
+                {
+                    currentPassword,
+                    newPassword,
+                } satisfies ChangePasswordRequest,
+            );
+
+            setCurrentUser(response.data);
+        } catch {
+            setAuthError("Nie udało się zmienić hasła.");
+        } finally {
+            setAuthBusy(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            setAuthBusy(true);
+            await api.post("/auth/logout");
+        } finally {
+            setAuthBusy(false);
+            setCurrentUser(null);
+            resetWorkspace();
+        }
     };
 
     const handleSelectWorld = (world: World) => {
@@ -411,6 +555,42 @@ export default function HomePage() {
         setIsPagesLoading(true);
     };
 
+    if (!authReady) {
+        return (
+            <div className="app-shell">
+                <FantasyCityBackdrop />
+                <AuthGate
+                    authEnabled={authEnabled}
+                    authReady={authReady}
+                    currentUser={currentUser}
+                    isBusy={authBusy}
+                    error={authError}
+                    onLogin={handleLogin}
+                    onChangePassword={handleChangePassword}
+                    onLogout={handleLogout}
+                />
+            </div>
+        );
+    }
+
+    if (authReady && authEnabled && (!currentUser || currentUser.mustChangePassword)) {
+        return (
+            <div className="app-shell">
+                <FantasyCityBackdrop />
+                <AuthGate
+                    authEnabled={authEnabled}
+                    authReady={authReady}
+                    currentUser={currentUser}
+                    isBusy={authBusy}
+                    error={authError}
+                    onLogin={handleLogin}
+                    onChangePassword={handleChangePassword}
+                    onLogout={handleLogout}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="app-shell">
             <FantasyCityBackdrop />
@@ -437,12 +617,12 @@ export default function HomePage() {
                     />
 
                     <nav className="module-navigation" aria-label="Moduły aplikacji">
-                        <button type="button" className={activeModule === "knowledge" ? "is-active" : ""} onClick={() => setActiveModule("knowledge")}>Wiedza</button>
-                        <button type="button" className={activeModule === "map" ? "is-active" : ""} onClick={() => setActiveModule("map")} disabled={!selectedWorld}>Mapa</button>
+                        <button type="button" data-testid="module-knowledge" className={activeModule === "knowledge" ? "is-active" : ""} onClick={() => setActiveModule("knowledge")}>Wiedza</button>
+                        <button type="button" data-testid="module-map" className={activeModule === "map" ? "is-active" : ""} onClick={() => setActiveModule("map")} disabled={!selectedWorld}>Mapa</button>
                         <button type="button" className={activeModule === "ai" ? "is-active" : ""} onClick={() => setActiveModule("ai")}>AI</button>
                     </nav>
 
-                    <div className="active-world">
+                    <div className="active-world" data-testid="active-world">
                         <span>Aktywny świat</span>
 
                         <strong>
@@ -450,6 +630,15 @@ export default function HomePage() {
                                 "Nie wybrano"}
                         </strong>
                     </div>
+
+                    {currentUser && (
+                        <div className="auth-user-chip" data-testid="auth-user">
+                            <span>{currentUser.role === 0 ? "Administrator" : currentUser.role === 1 ? "MG" : "Gracz"}</span>
+                            <strong>{currentUser.displayName}</strong>
+                            <small>{currentUser.email ?? "konto lokalne"}</small>
+                            <button type="button" className="page-button page-button--ghost" onClick={() => void handleLogout()}>Wyloguj</button>
+                        </div>
+                    )}
                 </header>
 
                 <div className="app-workspace">
@@ -478,6 +667,7 @@ export default function HomePage() {
                             onRestoreWorld={
                                 handleRestoreWorld
                             }
+                            canEdit={canEdit}
                         />
 
                         <div className="sidebar-divider">
@@ -508,6 +698,7 @@ export default function HomePage() {
                             onMoveFolder={
                                 handleMoveFolder
                             }
+                            canEdit={canEdit}
                         />
                     </aside>
 
@@ -562,6 +753,7 @@ export default function HomePage() {
                                 })
                             }
                             onDeletePage={handleDeletePage}
+                            canEdit={canEdit}
                         />}
                         {activeModule === "map" && selectedWorld && (
                             <WorldMap
@@ -569,11 +761,15 @@ export default function HomePage() {
                                 worldName={selectedWorld.name}
                                 folders={folders}
                                 pages={pages}
+                                forcePlayerView={authEnabled && currentUser?.role === 2}
                                 onOpenFolder={openMapLink}
                             />
                         )}
                         {activeModule === "ai" && (
                             <AiReadinessPanel />
+                        )}
+                        {currentUser?.role === 0 && (
+                            <UserAdminPanel enabled={authEnabled} />
                         )}
                     </main>
                 </div>

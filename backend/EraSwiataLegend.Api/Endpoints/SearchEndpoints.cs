@@ -1,3 +1,4 @@
+using EraSwiataLegend.Api.Authorization;
 using EraSwiataLegend.Application.Search;
 
 namespace EraSwiataLegend.Api.Endpoints;
@@ -5,12 +6,15 @@ namespace EraSwiataLegend.Api.Endpoints;
 public static class SearchEndpoints
 {
     public static IEndpointRouteBuilder MapSearchEndpoints(
-        this IEndpointRouteBuilder app)
+        this IEndpointRouteBuilder app,
+        IConfiguration configuration)
     {
-        app.MapGet("/search",
+        var endpoint = app.MapGet("/search",
             async (
                 string query,
                 Guid? worldId,
+                HttpContext httpContext,
+                IConfiguration configuration,
                 KnowledgeSearchService service,
                 CancellationToken cancellationToken) =>
             {
@@ -30,9 +34,15 @@ public static class SearchEndpoints
                 return Results.Ok(await service.SearchAsync(
                     query,
                     worldId,
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken));
             })
             .WithTags("Search");
+
+        if (configuration.IsAuthenticationEnabled())
+        {
+            endpoint.RequireAuthorization();
+        }
 
         return app;
     }

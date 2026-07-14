@@ -21,6 +21,7 @@ interface Props {
     onRestoreWorld: (
         worldId: string,
     ) => Promise<void>;
+    canEdit: boolean;
 }
 
 export default function WorldList({
@@ -33,6 +34,7 @@ export default function WorldList({
     onCreateWorld,
     onArchiveWorld,
     onRestoreWorld,
+    canEdit,
 }: Props) {
     const [isCreating, setIsCreating] =
         useState(false);
@@ -60,15 +62,18 @@ export default function WorldList({
                     <h2>Światy</h2>
                 </div>
 
-                <button
-                    type="button"
-                    className="world-create-button"
-                    onClick={() => setIsCreating(true)}
-                    aria-label="Utwórz świat"
-                    title="Nowy świat"
-                >
-                    ＋
-                </button>
+                {canEdit && (
+                    <button
+                        type="button"
+                        data-testid="world-create-button"
+                        className="world-create-button"
+                        onClick={() => setIsCreating(true)}
+                        aria-label="Utwórz świat"
+                        title="Nowy świat"
+                    >
+                        ＋
+                    </button>
+                )}
             </div>
 
             {isLoading ? (
@@ -100,6 +105,7 @@ export default function WorldList({
                             >
                                 <button
                                     type="button"
+                                    data-testid={`world-${world.id}`}
                                     className={`world-list-item${
                                         isSelected
                                             ? " world-list-item--selected"
@@ -118,26 +124,28 @@ export default function WorldList({
                                     </span>
                                 </button>
 
-                                <button
-                                    type="button"
-                                    className="world-row-action"
-                                    onClick={() =>
-                                        setWorldToArchive(
-                                            world,
-                                        )
-                                    }
-                                    aria-label={`Archiwizuj świat ${world.name}`}
-                                    title="Przenieś do archiwum"
-                                >
-                                    ▣
-                                </button>
+                                {canEdit && (
+                                    <button
+                                        type="button"
+                                        className="world-row-action"
+                                        onClick={() =>
+                                            setWorldToArchive(
+                                                world,
+                                            )
+                                        }
+                                        aria-label={`Archiwizuj świat ${world.name}`}
+                                        title="Przenieś do archiwum"
+                                    >
+                                        ▣
+                                    </button>
+                                )}
                             </li>
                         );
                     })}
                 </ul>
             )}
 
-            {archivedWorlds.length > 0 && (
+            {canEdit && archivedWorlds.length > 0 && (
                 <div className="world-archive-section">
                     <button
                         type="button"
@@ -195,7 +203,7 @@ export default function WorldList({
                 </div>
             )}
 
-            {isCreating && (
+            {canEdit && isCreating && (
                 <WorldCreateDialog
                     onCreate={onCreateWorld}
                     onClose={() =>
@@ -204,7 +212,7 @@ export default function WorldList({
                 />
             )}
 
-            {worldToArchive && (
+            {canEdit && worldToArchive && (
                 <WorldArchiveDialog
                     world={worldToArchive}
                     onArchive={onArchiveWorld}

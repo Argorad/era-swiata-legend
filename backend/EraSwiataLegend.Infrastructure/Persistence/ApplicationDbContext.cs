@@ -319,11 +319,35 @@ public class ApplicationDbContext
                 .IsRequired()
                 .HasMaxLength(200);
 
+            entity.Property(user => user.Email)
+                .HasMaxLength(320);
+
+            entity.Property(user => user.NormalizedEmail)
+                .HasMaxLength(320);
+
+            entity.Property(user => user.NormalizedDisplayName)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(user => user.PasswordHash)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.Property(user => user.SecurityStamp)
+                .IsRequired()
+                .HasMaxLength(64);
+
             entity.Property(user => user.Role)
                 .HasConversion<int>()
                 .IsRequired();
 
             entity.HasIndex(user => user.ExternalSubject)
+                .IsUnique();
+
+            entity.HasIndex(user => user.NormalizedDisplayName)
+                .IsUnique();
+
+            entity.HasIndex(user => user.NormalizedEmail)
                 .IsUnique();
         });
     }

@@ -9,16 +9,6 @@ export interface WorldMapModel {
     type: WorldMapType;
     imageFileId: string;
     isPublished: boolean;
-    isGridVisible: boolean;
-    gridSize: number;
-    canvasBackground: "ocean" | "parchment" | "dark" | "solid";
-    gridStyle: "lines" | "dots" | "hex";
-    gridColor: string;
-    gridOpacity: number;
-    gridLineWidth: number;
-    gridMajorEvery: number;
-    isGridMajorVisible: boolean;
-    isSnapToGridEnabled: boolean;
     isDrawingLayerVisible: boolean;
     isDrawingLayerLocked: boolean;
     isDrawingLayerVisibleToPlayers: boolean;

@@ -19,6 +19,7 @@ interface Props {
         folderId: string,
         destinationFolderId: string | null,
     ) => Promise<void>;
+    canEdit: boolean;
 }
 
 function getFolderIcon(folder: Folder): string {
@@ -41,6 +42,7 @@ export default function FolderItem({
     onCreateSubfolder,
     onRenameFolder,
     onMoveFolder,
+    canEdit,
 }: Props) {
     const [isRenaming, setIsRenaming] =
         useState(false);
@@ -230,6 +232,7 @@ export default function FolderItem({
                     <>
                         <button
                             type="button"
+                            data-testid={`folder-${folder.id}`}
                             className="folder-name-button"
                             onClick={() =>
                                 onSelectFolder(
@@ -251,7 +254,7 @@ export default function FolderItem({
                             )}
                         </button>
 
-                        {!isSystemFolder && (
+                        {canEdit && !isSystemFolder && (
                             <FolderActions
                                 onCreateSubfolder={() =>
                                     onCreateSubfolder(

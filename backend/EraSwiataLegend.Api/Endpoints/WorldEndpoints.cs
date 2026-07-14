@@ -1,6 +1,7 @@
 using EraSwiataLegend.Application.Worlds.Commands;
 using EraSwiataLegend.Application.Worlds.DTOs;
 using EraSwiataLegend.Application.Worlds.Handlers;
+using EraSwiataLegend.Api.Authorization;
 using EraSwiataLegend.Domain.Enums;
 
 namespace EraSwiataLegend.Api.Endpoints;
@@ -8,17 +9,26 @@ namespace EraSwiataLegend.Api.Endpoints;
 public static class WorldEndpoints
 {
     public static IEndpointRouteBuilder MapWorldEndpoints(
-        this IEndpointRouteBuilder app)
+        this IEndpointRouteBuilder app,
+        IConfiguration configuration)
     {
         var group = app.MapGroup("/worlds")
             .WithTags("Worlds");
 
+        if (configuration.IsAuthenticationEnabled())
+        {
+            group.RequireAuthorization();
+        }
+
         group.MapGet("/",
             async (
+                HttpContext httpContext,
+                IConfiguration configuration,
                 GetWorldsQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
                 var result = await handler.HandleAsync(
+                    httpContext.EffectivePlayerView(configuration),
                     cancellationToken);
 
                 return Results.Ok(result);
@@ -56,6 +66,9 @@ public static class WorldEndpoints
                     $"/worlds/{result.Id}",
                     result);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<WorldDto>(
                 StatusCodes.Status201Created)
             .ProducesValidationProblem(
@@ -82,6 +95,9 @@ public static class WorldEndpoints
 
                 return Results.Ok(result);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<WorldDto>(
                 StatusCodes.Status200OK)
             .Produces(
@@ -108,6 +124,9 @@ public static class WorldEndpoints
 
                 return Results.Ok(result);
             })
+            .RequireAuthorizationIfEnabled(
+                configuration,
+                AuthorizationPolicies.GameMasterOrAdministrator)
             .Produces<WorldDto>(
                 StatusCodes.Status200OK)
             .Produces(

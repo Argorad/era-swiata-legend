@@ -8,6 +8,9 @@
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # Environment and secrets
 .env
@@ -25,3 +28,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Runtime uploads (metadata belongs in PostgreSQL; binaries stay on the server)
+backend/data/uploads/

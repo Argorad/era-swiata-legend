@@ -499,11 +499,37 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NormalizedDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -511,6 +537,12 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ExternalSubject")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedDisplayName")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedEmail")
                         .IsUnique();
 
                     b.ToTable("UserAccounts");
@@ -888,6 +920,11 @@ namespace EraSwiataLegend.Infrastructure.Persistence.Migrations
                     b.Navigation("Markers");
                 });
 #pragma warning restore 612, 618
+        }
+
+        public static void BuildSnapshot(ModelBuilder modelBuilder)
+        {
+            new ApplicationDbContextModelSnapshot().BuildModel(modelBuilder);
         }
     }
 }

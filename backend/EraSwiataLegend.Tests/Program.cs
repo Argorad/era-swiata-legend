@@ -1,3 +1,4 @@
+using EraSwiataLegend.Application.Map;
 using EraSwiataLegend.Domain.Entities;
 using EraSwiataLegend.Domain.Enums;
 using EraSwiataLegend.Domain.Rules;
@@ -122,13 +123,6 @@ var tests = new List<(string Name, Action Test)>
         AssertThrows<ArgumentException>(() =>
             layer.Update("Błędna", 0, 0, 0, 0, 0, true, true, false));
     }),
-    ("Konfiguracja siatki mapy ma bezpieczne granice", () =>
-    {
-        var map = new WorldMap();
-        map.ConfigureGrid(true, 64);
-        Assert(map.IsGridVisible && map.GridSize == 64);
-        AssertThrows<ArgumentOutOfRangeException>(() => map.ConfigureGrid(true, 4));
-    }),
     ("Archiwizacja świata zachowuje dane", () =>
     {
         var world = new World();
@@ -150,14 +144,6 @@ var tests = new List<(string Name, Action Test)>
         Assert(Math.Abs(layer.Opacity - .45) < .001);
         AssertThrows<ArgumentException>(() =>
             layer.Update("Błędna", 0, 0, 1, 0, 10, true, false, false, 1.2));
-    }),
-    ("Zaawansowana siatka zachowuje styl i przyciąganie", () =>
-    {
-        var map = new WorldMap();
-        map.ConfigureGrid(true, 48, "dots", "#f0d080", .7, 2, 10, true, true, "ocean");
-        Assert(map.GridStyle == "dots" && map.IsSnapToGridEnabled && map.GridMajorEvery == 10);
-        AssertThrows<ArgumentException>(() =>
-            map.ConfigureGrid(true, 48, "invalid", "#f0d080", .7, 2, 10, true, true, "ocean"));
     }),
     ("Marker gracza zachowuje autora i domyślną prywatność", () =>
     {
@@ -192,6 +178,24 @@ var tests = new List<(string Name, Action Test)>
         };
         Assert(annotation.IsLocked && !annotation.HasTextBorder &&
             annotation.Tool == "text");
+    }),
+    ("API akceptuje kontrakt zapisu tekstu, linii, strzałki i pióra", () =>
+    {
+        var points = new[] { new MapStrokePointDto(10, 20), new MapStrokePointDto(80, 90) };
+        foreach (var tool in new[] { "text", "line", "arrow", "pen" })
+        {
+            var request = new SaveMapDrawingStrokeRequest(
+                "#9d2f32", 5, false, points, true, tool,
+                "transparent", .8, "solid", tool == "text" ? "Stolica" : "", 24,
+                true, 0, 10, true, false);
+            Assert(MapDrawingRequestValidator.IsValid(request));
+        }
+    }),
+    ("API odrzuca klik bez przeciągnięcia jako adnotację", () =>
+    {
+        var request = new SaveMapDrawingStrokeRequest(
+            "#9d2f32", 5, false, new[] { new MapStrokePointDto(10, 20) }, true, "line");
+        Assert(!MapDrawingRequestValidator.IsValid(request));
     })
 };
 

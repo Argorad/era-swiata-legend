@@ -1,4 +1,5 @@
 using EraSwiataLegend.Application.Interfaces;
+using EraSwiataLegend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EraSwiataLegend.Application.Search;
@@ -9,7 +10,8 @@ public sealed class KnowledgeSearchService
         Guid Id,
         Guid WorldId,
         Guid? ParentFolderId,
-        string Name);
+        string Name,
+        bool IsVisibleToPlayers);
 
     private readonly IApplicationDbContext _dbContext;
 
@@ -18,12 +20,19 @@ public sealed class KnowledgeSearchService
         _dbContext = dbContext;
     }
 
+    public Task<List<SearchResultDto>> SearchAsync(
+        string query,
+        Guid? worldId,
+        CancellationToken cancellationToken) =>
+        SearchAsync(query, worldId, false, cancellationToken);
+
     public async Task<List<SearchResultDto>> SearchAsync(
         string query,
         Guid? worldId,
+        bool playerView,
         CancellationToken cancellationToken)
     {
-        var normalized = query.Trim().ToLower();
+        var normalized = query.Trim().ToLowerInvariant();
 
         if (normalized.Length < 2)
         {
@@ -33,7 +42,8 @@ public sealed class KnowledgeSearchService
         var worlds = await _dbContext.Worlds
             .AsNoTracking()
             .Where(world =>
-                (!worldId.HasValue || world.Id == worldId.Value))
+                (!worldId.HasValue || world.Id == worldId.Value) &&
+                (!playerView || world.Status == WorldStatus.Active))
             .Select(world => new
             {
                 world.Id,
@@ -53,11 +63,11 @@ public sealed class KnowledgeSearchService
                 folder.Id,
                 folder.WorldId,
                 folder.ParentFolderId,
-                folder.Name))
+                folder.Name,
+                folder.IsVisibleToPlayers))
             .ToListAsync(cancellationToken);
 
-        var folderById = folders.ToDictionary(
-            folder => folder.Id);
+        var folderById = folders.ToDictionary(folder => folder.Id);
         var results = new List<SearchResultDto>();
 
         results.AddRange(worlds
@@ -80,7 +90,8 @@ public sealed class KnowledgeSearchService
             .Where(folder =>
                 folder.Name.Contains(
                     query,
-                    StringComparison.OrdinalIgnoreCase))
+                    StringComparison.OrdinalIgnoreCase) &&
+                (!playerView || IsVisibleToPlayer(folder, folderById)))
             .Take(30)
             .Select(folder => new SearchResultDto(
                 "folder",
@@ -98,12 +109,7 @@ public sealed class KnowledgeSearchService
 
         var pages = await _dbContext.Pages
             .AsNoTracking()
-            .Where(page =>
-                worldIds.Contains(page.WorldId) &&
-                (page.Title.ToLower().Contains(normalized) ||
-                 page.Content.ToLower().Contains(normalized)))
-            .OrderBy(page => page.Title)
-            .Take(40)
+            .Where(page => worldIds.Contains(page.WorldId))
             .Select(page => new
             {
                 page.Id,
@@ -114,8 +120,19 @@ public sealed class KnowledgeSearchService
             })
             .ToListAsync(cancellationToken);
 
-        results.AddRange(pages.Select(page =>
-            new SearchResultDto(
+        results.AddRange(pages
+            .Where(page =>
+                page.Title.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase) ||
+                page.Content.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(page =>
+                !playerView ||
+                IsVisibleToPlayer(page.FolderId, page.WorldId, folderById))
+            .Take(40)
+            .Select(page => new SearchResultDto(
                 "page",
                 page.Id,
                 page.WorldId,
@@ -131,22 +148,27 @@ public sealed class KnowledgeSearchService
 
         var files = await _dbContext.FileAttachments
             .AsNoTracking()
-            .Where(file =>
-                worldIds.Contains(file.WorldId) &&
-                file.OriginalName.ToLower().Contains(normalized))
-            .OrderBy(file => file.OriginalName)
-            .Take(30)
+            .Where(file => worldIds.Contains(file.WorldId))
             .Select(file => new
             {
                 file.Id,
                 file.WorldId,
                 file.FolderId,
-                file.OriginalName
+                file.OriginalName,
+                file.IsVisibleToPlayers
             })
             .ToListAsync(cancellationToken);
 
-        results.AddRange(files.Select(file =>
-            new SearchResultDto(
+        results.AddRange(files
+            .Where(file =>
+                file.OriginalName.Contains(
+                    query,
+                    StringComparison.OrdinalIgnoreCase) &&
+                (!playerView ||
+                 (file.IsVisibleToPlayers &&
+                  IsVisibleToPlayer(file.FolderId, file.WorldId, folderById))))
+            .Take(30)
+            .Select(file => new SearchResultDto(
                 "file",
                 file.Id,
                 file.WorldId,
@@ -167,15 +189,45 @@ public sealed class KnowledgeSearchService
             .ToList();
     }
 
+    private static bool IsVisibleToPlayer(
+        FolderPathItem folder,
+        IReadOnlyDictionary<Guid, FolderPathItem> folderById)
+    {
+        return IsVisibleToPlayer(folder.Id, folder.WorldId, folderById);
+    }
+
+    private static bool IsVisibleToPlayer(
+        Guid? folderId,
+        Guid worldId,
+        IReadOnlyDictionary<Guid, FolderPathItem> folderById)
+    {
+        var currentId = folderId;
+        var visited = new HashSet<Guid>();
+
+        while (currentId.HasValue && visited.Add(currentId.Value))
+        {
+            if (!folderById.TryGetValue(currentId.Value, out var folder) ||
+                folder.WorldId != worldId ||
+                !folder.IsVisibleToPlayers)
+            {
+                return false;
+            }
+
+            currentId = folder.ParentFolderId;
+        }
+
+        return currentId is null;
+    }
+
     private static string BuildBreadcrumb(
         Guid worldId,
-        Guid folderId,
+        Guid? folderId,
         IReadOnlyDictionary<Guid, string> worldNames,
         IReadOnlyDictionary<Guid, FolderPathItem> folderById)
     {
         var names = new List<string>();
         var visited = new HashSet<Guid>();
-        var currentId = (Guid?)folderId;
+        var currentId = folderId;
 
         while (currentId.HasValue && visited.Add(currentId.Value))
         {

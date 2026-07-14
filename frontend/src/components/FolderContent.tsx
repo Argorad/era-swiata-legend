@@ -29,6 +29,7 @@ interface Props {
     onTrashPage: () => Promise<void>;
     onRestorePage: () => Promise<void>;
     onDeletePage: () => Promise<void>;
+    canEdit: boolean;
 }
 
 function getFolderPath(
@@ -130,6 +131,7 @@ export default function FolderContent({
     onTrashPage,
     onRestorePage,
     onDeletePage,
+    canEdit,
 }: Props) {
     const [isCreatingPage, setIsCreatingPage] =
         useState(false);
@@ -179,6 +181,7 @@ export default function FolderContent({
                 folder={folder}
                 folders={folders}
                 page={selectedPage}
+                canEdit={canEdit}
                 onBack={onBackToFolder}
                 onUpdate={onUpdatePage}
                 onMove={onMovePage}
@@ -337,7 +340,7 @@ export default function FolderContent({
                                 : pages.length}
                         </span>
 
-                        {folder.type === 0 && <button
+                        {canEdit && folder.type === 0 && <button
                             type="button"
                             className="page-add-button"
                             onClick={() =>
@@ -419,7 +422,7 @@ export default function FolderContent({
                                 ? "Dodaj pierwszą stronę, aby utrwalić historię, miejsce lub postać z tego folderu."
                                 : "Nie ma tutaj stron oczekujących na przywrócenie."}
                         </p>
-                        {folder.type === 0 && (
+                        {canEdit && folder.type === 0 && (
                             <button
                                 type="button"
                                 onClick={() =>
@@ -437,6 +440,7 @@ export default function FolderContent({
                 <FileLibrary
                     worldId={worldId}
                     folder={folder}
+                    canEdit={canEdit}
                 />
             )}
 

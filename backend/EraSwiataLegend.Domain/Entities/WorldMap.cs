@@ -17,6 +17,7 @@ public class WorldMap : BaseEntity
 
     public bool IsPublished { get; set; }
 
+    // Legacy persistence only. The grid feature is no longer exposed or used.
     public bool IsGridVisible { get; set; }
 
     public int GridSize { get; set; } = 64;
@@ -58,42 +59,6 @@ public class WorldMap : BaseEntity
 
     public ICollection<MapDrawingStroke> DrawingStrokes { get; set; } =
         new List<MapDrawingStroke>();
-
-    public void ConfigureGrid(
-        bool isVisible, int size, string style, string color,
-        double opacity, double lineWidth, int majorEvery,
-        bool isMajorVisible, bool isSnapEnabled, string canvasBackground)
-    {
-        if (size is < 8 or > 512)
-        {
-            throw new ArgumentOutOfRangeException(nameof(size));
-        }
-
-        if (style is not ("lines" or "dots" or "hex") ||
-            canvasBackground is not ("ocean" or "parchment" or "dark" or "solid") ||
-            !System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9a-fA-F]{6}$") ||
-            opacity is < 0.05 or > 1 || lineWidth is < 0.5 or > 8 || majorEvery is < 2 or > 20)
-        {
-            throw new ArgumentException("Nieprawidłowe ustawienia siatki.");
-        }
-
-        IsGridVisible = isVisible;
-        GridSize = size;
-        GridStyle = style;
-        GridColor = color;
-        GridOpacity = opacity;
-        GridLineWidth = lineWidth;
-        GridMajorEvery = majorEvery;
-        IsGridMajorVisible = isMajorVisible;
-        IsSnapToGridEnabled = isSnapEnabled;
-        CanvasBackground = canvasBackground;
-        UpdatedAt = DateTime.UtcNow;
-    }
-
-    public void ConfigureGrid(bool isVisible, int size) =>
-        ConfigureGrid(isVisible, size, GridStyle, GridColor, GridOpacity,
-            GridLineWidth, GridMajorEvery, IsGridMajorVisible,
-            IsSnapToGridEnabled, CanvasBackground);
 
     public void ConfigureDrawingLayer(
         bool isVisible, bool isLocked, bool isVisibleToPlayers)
