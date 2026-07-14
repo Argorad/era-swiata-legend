@@ -8,7 +8,8 @@ public sealed class GetPagesQueryHandler
 {
     private readonly IApplicationDbContext _dbContext;
 
-    public GetPagesQueryHandler(IApplicationDbContext dbContext)
+    public GetPagesQueryHandler(
+        IApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -17,7 +18,11 @@ public sealed class GetPagesQueryHandler
         Guid worldId,
         Guid folderId,
         CancellationToken cancellationToken = default) =>
-        HandleAsync(worldId, folderId, false, cancellationToken);
+        HandleAsync(
+            worldId,
+            folderId,
+            false,
+            cancellationToken);
 
     public async Task<List<PageDto>> HandleAsync(
         Guid worldId,
@@ -49,34 +54,42 @@ public sealed class GetPagesQueryHandler
 
         var folders = await _dbContext.Folders
             .AsNoTracking()
-            .Where(folder => folder.WorldId == worldId)
+            .Where(folder =>
+                folder.WorldId == worldId)
             .Select(folder => new
             {
                 folder.Id,
                 folder.ParentFolderId,
                 folder.IsVisibleToPlayers
             })
-            .ToDictionaryAsync(folder => folder.Id, cancellationToken);
+            .ToDictionaryAsync(
+                folder => folder.Id,
+                cancellationToken);
 
-        return pages.Where(page =>
-        {
-            var currentFolderId = page.FolderId;
-            var visited = new HashSet<Guid>();
-
-            while (currentFolderId.HasValue && visited.Add(currentFolderId.Value))
+        return pages
+            .Where(page =>
             {
-                if (!folders.TryGetValue(
-                        currentFolderId.Value,
-                        out var folder) ||
-                    !folder.IsVisibleToPlayers)
+                Guid? currentFolderId = page.FolderId;
+                var visited = new HashSet<Guid>();
+
+                while (
+                    currentFolderId.HasValue &&
+                    visited.Add(currentFolderId.Value))
                 {
-                    return false;
+                    if (!folders.TryGetValue(
+                            currentFolderId.Value,
+                            out var folder) ||
+                        !folder.IsVisibleToPlayers)
+                    {
+                        return false;
+                    }
+
+                    currentFolderId =
+                        folder.ParentFolderId;
                 }
 
-                currentFolderId = folder.ParentFolderId;
-            }
-
-            return currentFolderId is null;
-        }).ToList();
+                return currentFolderId is null;
+            })
+            .ToList();
     }
 }

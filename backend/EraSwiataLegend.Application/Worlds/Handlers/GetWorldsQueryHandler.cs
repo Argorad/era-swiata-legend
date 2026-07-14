@@ -22,20 +22,26 @@ public sealed class GetWorldsQueryHandler
         GetWorldsQuery request,
         CancellationToken cancellationToken)
     {
-        return await GetWorldsAsync(cancellationToken);
+        return await GetWorldsAsync(
+            false,
+            cancellationToken);
     }
 
     public async Task<List<WorldDto>> HandleAsync(
         CancellationToken cancellationToken = default)
     {
-        return await GetWorldsAsync(false, cancellationToken);
+        return await GetWorldsAsync(
+            false,
+            cancellationToken);
     }
 
     public async Task<List<WorldDto>> HandleAsync(
         bool playerView,
         CancellationToken cancellationToken = default)
     {
-        return await GetWorldsAsync(playerView, cancellationToken);
+        return await GetWorldsAsync(
+            playerView,
+            cancellationToken);
     }
 
     private async Task<List<WorldDto>> GetWorldsAsync(

@@ -43,6 +43,13 @@ public partial class AddLocalUserAuthentication : Migration
             maxLength: 64,
             nullable: true);
 
+        migrationBuilder.AddColumn<bool>(
+            name: "MustChangePassword",
+            table: "UserAccounts",
+            type: "boolean",
+            nullable: false,
+            defaultValue: false);
+
         migrationBuilder.Sql("""
             UPDATE "UserAccounts"
             SET "NormalizedDisplayName" = UPPER(BTRIM("DisplayName"))
@@ -92,6 +99,10 @@ public partial class AddLocalUserAuthentication : Migration
 
         migrationBuilder.DropColumn(
             name: "SecurityStamp",
+            table: "UserAccounts");
+
+        migrationBuilder.DropColumn(
+            name: "MustChangePassword",
             table: "UserAccounts");
     }
 }
